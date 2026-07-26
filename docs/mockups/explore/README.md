@@ -12,7 +12,7 @@ onboarding новых членов команды.
 | 02 | [`02_explore_spreadsheet.html`](02_explore_spreadsheet.html) | Leaderboard из 6 гипотез с разными статусами. Bulk-select для CSS-overlay compare. Locked-row (`#51`) показывает pessimistic-lock presence. Auto-screening (`#38`) — системное событие, не пользователь. |
 | 03 | [`03_notebook.html`](03_notebook.html) | Drill-down на `#42`. 5 вкладок (Code / Backtest / Equity Curve / History / Discussion). Equity-кривая inline SVG, stability 4/4, audit trail на 5 событий. Lazy AI-кнопки (`🤖 explain / suggest / report`) появляются только на релевантном шаге status-flow. |
 | 04 | [`04_activity.html`](04_activity.html) | Глобальный activity feed за 7 дней. 7 типов событий (created/edit/rerun/approve/reject/comment/AI/status). Авто-status-изменения помечены actor=system. Filter-chips по типу события. |
-| 05 | [`05_explore_new.html`](05_explore_new.html) | Следующий шаг после клика `+ New hypothesis`. Форма `/explore/new`: identity → params → period → metadata → footer с `Save as draft` и `Save & Run backtest →`. Без AI на пустом листе — вручную. |
+| 05 | [`05_explore_new.html`](05_explore_new.html) | Следующий шаг после клика `+ New hypothesis`. **AI-structured form:** одна textarea «опиши гипотезу в одном предложении» → AI структурирует → pre-filled editable форма. Inline-edit любого поля. Confidence-индикаторы (✎ high, ⚠ low) у каждого поля. |
 
 ## Как открыть
 
