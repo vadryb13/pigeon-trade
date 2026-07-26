@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>AQR · /explore/new (AI-structured)</title>
+<title>AQR · /explore/new — batch notebook</title>
 <style>
 :root {
   --bg: #1a1d23;
@@ -11,10 +11,10 @@
   --text: #e7e9ee;
   --muted: #8a93a3;
   --accent: #7cb7ff;
+  --purple: #c084fc;
   --green: #51cf66;
   --yellow: #ffd43b;
   --red: #ff6b6b;
-  --purple: #c084fc;
   --border: #2f343c;
 }
 * { box-sizing: border-box; }
@@ -34,276 +34,330 @@ html, body {
 .crumbs a { color: var(--accent); }
 .crumbs span { margin: 0 8px; }
 .crumbs strong { color: var(--text); }
-.wrap { max-width: 760px; margin: 24px auto; padding: 0 24px; }
-.page-title { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
-.page-title h2 { margin: 0; font-size: 22px; font-weight: 500; }
-.tag { display: inline-block; padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 500; }
-.tag-ai { background: rgba(192, 132, 252, 0.18); color: var(--purple); }
-.page-subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
 
-.step {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 10px; padding: 20px 24px; margin-bottom: 16px;
-}
-.step-head {
+.batch-header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px;
+  padding: 20px 32px; border-bottom: 1px solid var(--border);
 }
-.step-head .num {
+.batch-header h2 { margin: 0; font-size: 20px; font-weight: 500; }
+.batch-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.batch-progress { display: flex; gap: 16px; font-size: 12px; color: var(--muted); align-items: center; }
+.batch-progress .ok { color: var(--green); }
+.batch-progress .active { color: var(--purple); }
+.batch-progress .pending { color: var(--muted); }
+
+.cells { max-width: 920px; margin: 24px auto 100px; padding: 0 24px; }
+
+/* — Cell states — */
+.cell {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 14px; overflow: hidden;
+}
+.cell-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.cell-head .num {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 50%;
-  background: var(--accent); color: #0a1828; font-weight: 600; font-size: 12px;
-  margin-right: 10px;
+  background: var(--bg-elev); color: var(--muted); font-weight: 600; font-size: 12px;
 }
-.step-head .num.done { background: var(--green); }
-.step-head h3 { margin: 0; font-size: 15px; font-weight: 600; display: inline-block; vertical-align: middle; }
-.step-head .actions { display: flex; gap: 8px; }
+.cell-head .title { flex: 1; font-weight: 500; }
+.cell-head .title input {
+  background: transparent; border: 0; color: var(--text);
+  font: inherit; width: 100%; padding: 0;
+}
+.cell-head .title input:focus { outline: none; border-bottom: 1px solid var(--accent); }
+.cell-status { font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 500; }
+.status-thinking { background: rgba(192, 132, 252, 0.18); color: var(--purple); }
+.status-ready { background: rgba(81, 207, 102, 0.18); color: var(--green); }
+.status-queued { background: rgba(138, 147, 163, 0.18); color: var(--muted); }
+.status-failed { background: rgba(255, 107, 107, 0.18); color: var(--red); }
 
-textarea.prompt, textarea.notes {
+.cell-body { padding: 0 18px; }
+
+/* — THINKING STATE — */
+.research-log { padding: 14px 0; }
+.research-step {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 4px 0; font-size: 13px; color: var(--text);
+}
+.research-step .icon {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px;
+}
+.research-step.done .icon { background: rgba(81, 207, 102, 0.18); color: var(--green); }
+.research-step.active .icon {
+  background: rgba(192, 132, 252, 0.18); color: var(--purple);
+  animation: pulse 1.4s infinite;
+}
+.research-step.pending .icon { background: var(--bg-elev); color: var(--muted); }
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+.research-step .step-text { color: var(--muted); }
+.research-step.done .step-text { color: var(--text); }
+
+/* — READY STATE: editable fields — */
+.fields { padding: 16px 0; }
+.fields-row {
+  display: grid; grid-template-columns: 90px 1fr; gap: 6px 12px;
+  margin-bottom: 6px; align-items: center; font-size: 13px;
+}
+.fields-row .k { color: var(--muted); }
+.fields-row .v {
+  display: flex; align-items: center; gap: 8px;
+}
+.fields-row .v input[type="text"],
+.fields-row .v input[type="date"],
+.fields-row .v select {
   background: var(--bg); border: 1px solid var(--border); color: var(--text);
-  padding: 14px 16px; border-radius: 8px; font: inherit; font-size: 15px;
-  font-family: inherit; width: 100%; line-height: 1.5;
+  padding: 5px 9px; border-radius: 4px; font: inherit; font-size: 13px;
 }
-textarea.prompt { min-height: 110px; resize: vertical; }
-textarea.notes { min-height: 50px; }
-textarea.prompt:focus, textarea.notes:focus { outline: none; border-color: var(--accent); }
+.fields-row .v input.wide { flex: 1; min-width: 150px; }
+.fields-row .v .pc {
+  background: var(--bg); border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 4px;
+  font-family: ui-monospace, monospace; font-size: 12px;
+}
+.fields-row .v .pc .pk { color: var(--muted); }
+.fields-row .v .pc .pv { color: var(--accent); margin-left: 4px; }
 
-.examples { margin-top: 12px; }
-.examples-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 6px; }
-.chip {
-  display: inline-block; padding: 6px 12px; border-radius: 16px;
-  background: var(--bg-elev); border: 1px solid var(--border);
-  font-size: 12px; cursor: pointer; color: var(--text);
-  margin-right: 6px; margin-bottom: 6px;
+.rationale {
+  background: rgba(192, 132, 252, 0.06); border-left: 3px solid var(--purple);
+  padding: 10px 14px; margin: 8px 0 12px; border-radius: 0 6px 6px 0;
+  font-size: 13px; color: var(--text);
 }
-.chip:hover { background: var(--border); }
+.rationale .icon { color: var(--purple); margin-right: 8px; font-weight: 600; }
+.rationale strong { color: var(--text); }
+.rationale .meta { color: var(--muted); font-size: 11px; margin-top: 6px; }
+
+.cell-footer {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 18px; border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.cell-footer .right { margin-left: auto; display: flex; gap: 8px; }
 
 .btn {
-  padding: 9px 18px; border-radius: 6px; border: 1px solid var(--border);
+  padding: 7px 14px; border-radius: 5px; border: 1px solid var(--border);
   background: transparent; color: var(--text); cursor: pointer;
-  font: inherit; font-size: 14px; display: inline-flex; align-items: center;
-  gap: 8px;
+  font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;
 }
 .btn:hover { background: var(--bg); }
-.btn-primary {
-  background: var(--accent); color: #0a1828;
-  border-color: var(--accent); font-weight: 600;
-}
-.btn-ai {
-  background: linear-gradient(135deg, var(--purple), var(--accent));
-  color: white; border-color: transparent; font-weight: 600;
-  padding: 11px 22px; font-size: 15px;
-}
-.btn-success {
-  background: var(--green); color: #0a1828;
-  border-color: var(--green); font-weight: 600;
-}
+.btn-primary { background: var(--accent); color: #0a1828; border-color: var(--accent); font-weight: 600; }
+.btn-success { background: var(--green); color: #0a1828; border-color: var(--green); font-weight: 600; }
+.btn-danger { background: var(--red); color: white; border-color: var(--red); font-weight: 600; }
 
-.thinking {
-  display: flex; align-items: center; gap: 14px;
-  padding: 16px 20px; background: rgba(192, 132, 252, 0.08);
-  border: 1px dashed var(--purple); border-radius: 8px;
-  margin: 16px 0; font-size: 13px; color: var(--text);
-}
-.thinking .dot {
-  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-  background: var(--purple); animation: pulse 1.4s infinite;
-}
-.thinking .dot:nth-child(2) { animation-delay: 0.2s; }
-.thinking .dot:nth-child(3) { animation-delay: 0.4s; }
-@keyframes pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
-}
+/* queued cell */
+.cell-queued { opacity: 0.55; }
+.cell-queued .cell-head .num { color: var(--muted); }
 
-.fields {
-  display: grid; grid-template-columns: 130px 1fr; gap: 10px 14px;
-  align-items: center; margin-bottom: 12px;
+/* FAB bottom */
+.batch-footer {
+  position: sticky; bottom: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 24px;
+  background: var(--bg-elev); border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.2);
 }
-.fields .k { font-size: 13px; color: var(--muted); }
-.fields .v { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.v input[type="text"], .v input[type="date"], .v select {
-  background: var(--bg); border: 1px solid var(--border); color: var(--text);
-  padding: 7px 11px; border-radius: 5px; font: inherit; font-size: 14px;
-}
-.v input.wide { flex: 1; min-width: 200px; }
-.v input.short { width: 110px; }
-.v .pencil {
-  background: transparent; border: 0; color: var(--muted);
-  cursor: pointer; font-size: 14px; padding: 4px 6px;
-}
-.v .pencil:hover { color: var(--accent); }
-
-.params-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.params-chips .pc {
-  background: var(--bg-elev); border: 1px solid var(--border);
-  padding: 4px 10px; border-radius: 6px; font-size: 12px;
-  font-family: ui-monospace, monospace;
-}
-.params-chips .pc span.k { color: var(--muted); margin-right: 4px; }
-.params-chips .pc span.v { color: var(--accent); }
-
-.low-confidence {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px; background: rgba(255, 212, 59, 0.08);
-  border-left: 3px solid var(--yellow);
-  font-size: 12px; color: var(--yellow);
-  margin-top: 4px;
-}
-
-.hint {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11px; color: var(--muted); font-style: italic;
-}
-
-.shadow-state { display: none; }
-#step2:target ~ #step3 .shadow-state,
-body:has(#demo-step2-active) #step3 { display: block; }
+.batch-footer .count { color: var(--muted); font-size: 13px; }
+.batch-footer .right { margin-left: auto; display: flex; gap: 8px; }
 </style>
 </head>
 <body>
 
-<!--
-  STATE 1: default (Step 2 hidden until AI parses)
-  STATE 2: after AI parses — switch the bodies via classList.add('has-result')
-  Switch реализован через :has() / :target, ниже оба состояния как пример.
--->
-
 <div class="topbar">
   <h1><a href="#">AQR</a></h1>
   <div class="crumbs">
-    <a href="#">/explore</a><span>›</span><strong>New hypothesis</strong>
+    <a href="#">/explore</a><span>›</span><strong>New · batch of 3</strong>
   </div>
 </div>
 
-<div class="wrap">
-
-  <div class="page-title">
-    <h2>New hypothesis</h2>
-    <span class="tag tag-ai">AI-assisted</span>
-  </div>
-  <div class="page-subtitle">
-    Опиши в одном предложении. AI предложит параметры — поправь любое поле,
-    если что-то не так. Один клик — Save &amp; Run.
-  </div>
-
-  <!-- ─── STEP 1: prompt ─── -->
-  <div class="step">
-    <div class="step-head">
-      <div><span class="num">1</span><h3>Опиши гипотезу</h3></div>
-    </div>
-
-    <textarea class="prompt" autofocus
-              placeholder="Пример: momentum на Сбере с SMA5/50, период 2022-2024, дневки.">momentum на Сбере с SMA5/50, дневки, последние 3 года</textarea>
-
-    <div class="examples">
-      <div class="examples-label">Примеры кликов или напиши своё:</div>
-      <span class="chip">"RSI oversold на голубых фишках"</span>
-      <span class="chip">"Bollinger breakout на нефтянке"</span>
-      <span class="chip">"Z-score mean reversion для GAZP"</span>
-    </div>
-
-    <div style="margin-top: 16px; display: flex; align-items: center; gap: 12px;">
-      <button class="btn btn-ai">🤖 AI: структурировать →</button>
-      <span class="hint">⌘+Enter — тоже самое</span>
+<div class="batch-header">
+  <div>
+    <h2>Generating 3 hypotheses in parallel</h2>
+    <div class="batch-meta">
+      Каждая в изолированной ячейке · AI делает research + формулирует hypothesis
     </div>
   </div>
-
-  <!-- ─── STEP 1.5: thinking indicator (виден только пока LLM думает) ─── -->
-  <!--
-  <div class="thinking">
-    <span><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
-    <span>AI парсит параметры... <span style="color: var(--muted);">(обычно 3-7 сек)</span></span>
+  <div class="batch-progress">
+    <span class="ok">2 done</span>
+    <span class="active">1 thinking</span>
+    <span class="pending">· 0 queued</span>
   </div>
-  -->
+</div>
 
-  <!-- ─── STEP 2: extracted fields (appears after AI) ─── -->
-  <div class="step">
-    <div class="step-head">
-      <div><span class="num done">2</span><h3>Подтверди параметры</h3></div>
-      <div class="actions">
-        <button class="btn">← редактировать prompt</button>
+<div class="cells">
+
+  <!-- ─── CELL 1: thinking ─── -->
+  <div class="cell">
+    <div class="cell-head">
+      <span class="num">1</span>
+      <div class="title">
+        <input value="RSI oversold на голубых фишках">
+      </div>
+      <span class="cell-status status-thinking">● researching</span>
+    </div>
+
+    <div class="cell-body">
+      <div class="research-log">
+        <div class="research-step done">
+          <span class="icon">✓</span>
+          <span class="step-text"><b>Browser:</b> ищу RSI-mean-reversion на SBER/GAZP/LKOH (3/8)</span>
+        </div>
+        <div class="research-step done">
+          <span class="icon">✓</span>
+          <span class="step-text"><b>Browser:</b> фундаментал по голубым фишкам, последние новости (5/5)</span>
+        </div>
+        <div class="research-step done">
+          <span class="icon">✓</span>
+          <span class="step-text"><b>Analyst:</b> нашёл похожие гипотезы #3, #7 (Sharpe 0.95 / 1.12)</span>
+        </div>
+        <div class="research-step active">
+          <span class="icon">●</span>
+          <span class="step-text"><b>Editor:</b> формулирую экономическую гипотезу…</span>
+        </div>
+        <div class="research-step pending">
+          <span class="icon">○</span>
+          <span class="step-text"><b>Editor:</b> выбираю family + дефолтные параметры</span>
+        </div>
+        <div class="research-step pending">
+          <span class="icon">○</span>
+          <span class="step-text"><b>Editor:</b> составляю rationale</span>
+        </div>
       </div>
     </div>
 
-    <div class="fields">
-
-      <div class="k">Name</div>
-      <div class="v">
-        <input class="wide" type="text" value="SMA5/50 momentum on SBER">
-        <button class="pencil" title="AI confidence: high">✎</button>
-      </div>
-
-      <div class="k">Family</div>
-      <div class="v">
-        <select><option>momentum</option><option>mean_reversion</option><option>breakout</option><option>volatility</option></select>
-        <button class="pencil" title="AI confidence: high">✎</button>
-      </div>
-
-      <div class="k">Ticker</div>
-      <div class="v">
-        <input class="short" type="text" value="SBER">
-        <button class="pencil" title="AI confidence: high">✎</button>
-      </div>
-
-      <div class="k">Period</div>
-      <div class="v">
-        <input class="short" type="date" value="2022-01-03">
-        <span style="color: var(--muted);">→</span>
-        <input class="short" type="date" value="2024-12-30">
-        <button class="pencil" title="AI confidence: medium">⚠</button>
-      </div>
-
-      <div class="k">Timeframe</div>
-      <div class="v">
-        <select style="width: 110px;"><option>D1</option><option>H1</option><option>W</option>...</select>
-        <button class="pencil" title="AI confidence: low — default from prompt">⚠</button>
-        <span class="low-confidence">AI: «дневки» был твоим единственным намёком,
-          выбрал D1 по умолчанию. Если хотел H1 / W — кликни ⚠ и поменяй.</span>
-      </div>
-
-      <div class="k">Parameters</div>
-      <div class="v params-chips">
-        <span class="pc"><span class="k">fast</span><span class="v">5</span></span>
-        <span class="pc"><span class="k">slow</span><span class="v">50</span></span>
-        <span class="pc"><span class="k">signal</span><span class="v">crossover</span></span>
-        <button class="pencil" title="AI inferred defaults; edit if needed">✎</button>
-      </div>
-
-      <div class="k">Notes</div>
-      <div class="v">
-        <textarea class="notes" placeholder="опционально — что хочешь запомнить"></textarea>
-      </div>
-
-    </div>
-
-    <div class="note-meta" style="
-        background: rgba(124, 183, 255, 0.06); border-left: 3px solid var(--accent);
-        padding: 10px 14px; margin: 16px 0 0; border-radius: 0 6px 6px 0;
-        font-size: 13px;">
-      ⚠ AI взял дефолты для Period (3 года назад → сегодня),
-      Timeframe (D1), signal (crossover). Кликни ✎/⚠ если что-то не так.
-    </div>
-
-    <div style="margin-top: 18px; display: flex; align-items: center; gap: 10px;">
-      <a href="#" class="btn">Cancel</a>
-      <button class="btn">Save as draft</button>
-      <button class="btn btn-success">Save &amp; Run backtest →</button>
-      <span style="margin-left: auto; font-size: 12px; color: var(--muted);">
-        ⌘+Enter
+    <div class="cell-footer">
+      <span style="font-size: 12px; color: var(--muted);">
+        ⏱ ~30s · cell работает изолированно
       </span>
+      <div class="right">
+        <button class="btn">Cancel this cell</button>
+      </div>
     </div>
+  </div>
+
+  <!-- ─── CELL 2: ready (editable) ─── -->
+  <div class="cell">
+    <div class="cell-head">
+      <span class="num">2</span>
+      <div class="title">
+        <input value="Bollinger breakout на нефтянке">
+      </div>
+      <span class="cell-status status-ready">✓ ready · pending review</span>
+    </div>
+
+    <div class="cell-body">
+      <div class="fields">
+        <div class="fields-row">
+          <div class="k">Name</div>
+          <div class="v"><input class="wide" type="text" value="BBands breakout на нефтянке"></div>
+        </div>
+        <div class="fields-row">
+          <div class="k">Family</div>
+          <div class="v">
+            <select><option>breakout</option><option>momentum</option><option>mean_reversion</option></select>
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="k">Tickers</div>
+          <div class="v"><input type="text" value="ROSN, LKOH, GAZP"></div>
+        </div>
+        <div class="fields-row">
+          <div class="k">Params</div>
+          <div class="v">
+            <span class="pc"><span class="pk">window</span><span class="pv">20</span></span>
+            <span class="pc"><span class="pk">nstd</span><span class="pv">2.0</span></span>
+            <span class="pc"><span class="pk">direction</span><span class="pv">breakout_up</span></span>
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="k">Period</div>
+          <div class="v">
+            <input type="date" value="2020-01-01">
+            <span style="color: var(--muted);">→</span>
+            <input type="date" value="2024-12-31">
+          </div>
+        </div>
+        <div class="fields-row">
+          <div class="k">Timeframe</div>
+          <div class="v"><select><option>D1</option><option>H1</option></select></div>
+        </div>
+      </div>
+
+      <div class="rationale">
+        <div>
+          <span class="icon">🧠</span>
+          <strong>AI rationale:</strong>
+          Bollinger Band breakout на нефтянке исторически показывает
+          устойчивость в периоды роста волатильности. AI нашёл похожую
+          гипотезу <em>#19</em> (BBands на LKOH, Sharpe 0.78) — diversification
+          по секторам может дать альфу.
+        </div>
+        <div class="meta">
+          📰 5 новостей прочитано · 📊 2 похожих гипотезы · ⏱ research ~38s
+        </div>
+      </div>
+    </div>
+
+    <div class="cell-footer">
+      <span style="font-size: 12px; color: var(--muted);">
+        pending confirm → после ✓ попадёт в <code>/explore</code> со статусом <code>idea</code>
+      </span>
+      <div class="right">
+        <button class="btn">✎ Edit fields</button>
+        <button class="btn">🔄 Regenerate</button>
+        <button class="btn btn-danger">✗ Reject</button>
+        <button class="btn btn-success">✓ Confirm &amp; add to /explore</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── CELL 3: queued ─── -->
+  <div class="cell cell-queued">
+    <div class="cell-head">
+      <span class="num">3</span>
+      <div class="title">
+        <input value="Z-score mean reversion для GAZP">
+      </div>
+      <span class="cell-status status-queued">○ queued</span>
+    </div>
+
+    <div class="cell-body" style="padding: 16px 0; color: var(--muted); font-size: 13px;">
+      Будет запущен когда освободится AI-agent slot. Примерно через 45 сек.
+    </div>
+
+    <div class="cell-footer">
+      <div class="right">
+        <button class="btn">Remove from batch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Add new cell ─── -->
+  <div style="margin-top: 16px; text-align: center;">
+    <button class="btn">+ Add another hypothesis to this batch</button>
   </div>
 
 </div>
 
-<div style="max-width: 760px; margin: 0 auto 40px; padding: 0 24px; font-size: 12px; color: var(--muted);">
-  <strong>UX-flow (alternatives we picked between):</strong>
-  <ul style="line-height: 1.7; padding-left: 20px;">
-    <li><s>Manual form with 5 sections, 12 fields</s> — слишком много typing.</li>
-    <li><s>Multi-turn chat: «какой ticker?», «какой timeframe?»</s> — утомительно, пользователь хочет быстро.</li>
-    <li><strong>Single-shot prose → pre-filled editable form</strong> (этот макет) — баланс скорости и контроля.</li>
-  </ul>
+<div class="batch-footer">
+  <div class="count">
+    <span class="ok">✓ 1 ready</span>
+    <span style="margin: 0 8px;">·</span>
+    <span class="active">● 1 thinking</span>
+    <span style="margin: 0 8px;">·</span>
+    <span class="pending">○ 1 queued</span>
+  </div>
+  <div class="right">
+    <button class="btn">Save batch &amp; close</button>
+    <button class="btn btn-success">✓ Confirm all 1 ready</button>
+  </div>
 </div>
 
 </body>

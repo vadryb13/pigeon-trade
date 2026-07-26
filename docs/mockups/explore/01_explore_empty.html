@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>AQR · /explore · empty state</title>
+<title>AQR · /explore · empty (batch generate)</title>
 <style>
 :root {
   --bg: #1a1d23;
@@ -11,10 +11,9 @@
   --text: #e7e9ee;
   --muted: #8a93a3;
   --accent: #7cb7ff;
-  --accent-2: #4dabf7;
+  --purple: #c084fc;
   --green: #51cf66;
   --yellow: #ffd43b;
-  --red: #ff6b6b;
   --border: #2f343c;
 }
 * { box-sizing: border-box; }
@@ -33,22 +32,57 @@ html, body {
 .tabs span { cursor: pointer; padding: 6px 10px; }
 .tabs span.active { color: var(--text); border-bottom: 2px solid var(--accent); }
 .stats { padding: 12px 24px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
-.stats span { margin-right: 24px; }
 .stats strong { color: var(--text); font-weight: 500; }
-.main { max-width: 900px; margin: 80px auto; padding: 0 24px; text-align: center; }
+.main { max-width: 920px; margin: 60px auto; padding: 0 24px; text-align: center; }
 .empty-card {
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; padding: 60px 40px; margin: 30px 0;
+  border-radius: 12px; padding: 60px 40px; margin: 24px 0;
 }
 .empty-card h2 { font-size: 22px; font-weight: 500; color: var(--text); margin: 0 0 12px; }
-.empty-card p { color: var(--muted); margin: 0 0 40px; font-size: 14px; }
-.actions { display: flex; gap: 16px; justify-content: center; }
-.btn { padding: 12px 24px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); cursor: pointer; font: inherit; font-size: 14px; }
+.empty-card p { color: var(--muted); margin: 0 0 30px; font-size: 14px; line-height: 1.6; }
+
+/* count selector */
+.count-selector {
+  display: inline-flex; align-items: center; gap: 12px;
+  margin: 0 0 28px;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  padding: 12px 16px; border-radius: 10px;
+}
+.count-selector label { font-size: 13px; color: var(--muted); }
+.count-buttons { display: flex; gap: 4px; }
+.count-buttons button {
+  width: 36px; height: 36px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; cursor: pointer; font: inherit; font-size: 14px;
+}
+.count-buttons button.active { background: var(--accent); color: #0a1828; border-color: var(--accent); font-weight: 600; }
+
+.btn {
+  padding: 12px 28px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-elev); color: var(--text); cursor: pointer; font: inherit; font-size: 15px;
+  display: inline-flex; align-items: center; gap: 10px;
+}
 .btn:hover { background: var(--border); }
-.btn-primary { background: var(--accent); color: #0a1828; border-color: var(--accent); font-weight: 600; }
-.tip { margin-top: 50px; padding: 16px 20px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; text-align: left; }
-.tip-title { color: var(--muted); font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-.tip code { background: var(--bg); padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+.btn-primary {
+  background: var(--accent); color: #0a1828; border-color: var(--accent);
+  font-weight: 600; padding: 14px 32px; font-size: 16px;
+}
+
+.flow {
+  display: flex; justify-content: center; align-items: center; gap: 8px;
+  margin-top: 28px; font-size: 12px; color: var(--muted);
+}
+.flow-step { display: flex; align-items: center; gap: 6px; }
+.flow-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+.tip {
+  margin: 30px auto 0; max-width: 600px;
+  padding: 14px 20px; background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 8px; text-align: left; font-size: 13px; color: var(--muted);
+}
+.tip strong { color: var(--accent); }
+.tip ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.7; }
+.tip code { background: var(--bg); padding: 2px 6px; border-radius: 3px; font-size: 12px; color: var(--text); }
 </style>
 </head>
 <body>
@@ -59,7 +93,6 @@ html, body {
     <span class="active">Spreadsheet</span>
     <span>Activity</span>
     <span>By ticker</span>
-    <span style="background: var(--accent); color: #0a1828; padding: 6px 12px; border-radius: 6px; font-weight: 600;">+ New</span>
   </div>
 </div>
 
@@ -71,20 +104,52 @@ html, body {
 
 <div class="main">
   <div class="empty-card">
-    <h2>Nothing here yet.</h2>
-    <p>Add your first trading hypothesis to start exploring.</p>
-    <div class="actions">
-      <button class="btn btn-primary">+ New hypothesis</button>
+    <h2>Generate hypotheses as a batch.</h2>
+    <p>
+      AI ищет контекст (новости, фундаментал, похожие гипотезы),
+      формирует экономическую гипотезу и предлагает параметры.
+      Каждая гипотеза — в отдельной ячейке, изолированно от других.
+      Финальный отбор — за тобой.
+    </p>
+
+    <div class="count-selector">
+      <label>Generate</label>
+      <div class="count-buttons">
+        <button>1</button>
+        <button>2</button>
+        <button class="active">3</button>
+        <button>4</button>
+        <button>5</button>
+      </div>
+      <label>hypotheses in parallel</label>
+    </div>
+
+    <div>
+      <button class="btn btn-primary">🤖 Generate &amp; research in parallel →</button>
+    </div>
+
+    <div class="flow">
+      <div class="flow-step"><span class="flow-dot"></span> Empty</div>
+      <div style="color: var(--muted);">— → —</div>
+      <div class="flow-step" style="color: var(--text);">researching (browser + editor)</div>
+      <div style="color: var(--muted);">— → —</div>
+      <div class="flow-step" style="color: var(--text);">isolated cells</div>
+      <div style="color: var(--muted);">— → —</div>
+      <div class="flow-step" style="color: var(--text);">your confirm</div>
+      <div style="color: var(--muted);">— → —</div>
+      <div class="flow-step" style="color: var(--text);">spreadsheet (idea)</div>
     </div>
   </div>
 
   <div class="tip">
-    <div class="tip-title">Tip</div>
-    <div>
-      Use <code>/explore/new</code> for manual form or describe the idea in plain English
-      and let the AI structure it for you. After the first backtest, the row appears
-      in the spreadsheet with the latest Sharpe / DSR / PBO.
-    </div>
+    <strong>Что происходит в каждой ячейке:</strong>
+    <ul>
+      <li><strong>Browser-agent</strong> ищет новости / статьи / фундаментал по теме гипотезы</li>
+      <li><strong>Analyst-agent</strong> смотрит существующие похожие гипотезы в реестре (<code>find_duplicates</code>)</li>
+      <li><strong>Editor-agent</strong> формулирует экономическую гипотезу с rationale</li>
+      <li>AI применяет дефолты для неизвестных полей (period=3y, timeframe=D1, signal=family-default)</li>
+    </ul>
+    Только ты решаешь что добавляется в <code>/explore</code> spreadsheet — с кнопкой ✓ Confirm в каждой ячейке.
   </div>
 </div>
 
