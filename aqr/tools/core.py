@@ -35,41 +35,37 @@ async def plan_research(goal: str) -> dict[str, Any]:
     plan = planner.plan(goal)
     result = asdict(plan)
 
-    # Дедупликация: проверяем только если БД доступна
-    try:
-        from ..db import _async_session_factory
-        from ..registry.embeddings import Embedder
-        from ..registry.store import RegistryStore
+    # Дедупликация через embedding
+    from ..db import _async_session_factory
+    from ..registry.embeddings import Embedder
+    from ..registry.store import RegistryStore
 
-        candidates_text = Embedder.hypothesis_to_text(
-            family=",".join(plan.hypothesis_families) or "unknown",
-            ticker=",".join(plan.tickers) or "unknown",
-            params={"start": plan.start_date, "end": plan.end_date},
+    candidates_text = Embedder.hypothesis_to_text(
+        family=",".join(plan.hypothesis_families) or "unknown",
+        ticker=",".join(plan.tickers) or "unknown",
+        params={"start": plan.start_date, "end": plan.end_date},
+    )
+    embedder = Embedder()
+    emb = await embedder.embed(candidates_text)
+    async with _async_session_factory() as db:
+        store = RegistryStore(db)
+        similar = await store.search_similar(emb, threshold=0.92, limit=5)
+    if similar:
+        result["similar_runs"] = [
+            {
+                "family": h.family, "ticker": h.ticker,
+                "similarity": round(sim, 3),
+                "previous_dsr": h.dsr,
+                "previous_sharpe": h.sharpe,
+                "run_id": str(h.run_id),
+            }
+            for h, sim in similar
+        ]
+        result["dedup_warning"] = (
+            f"Похожие гипотезы уже проверялись: "
+            f"{', '.join(f'{h.family}/{h.ticker}' for h, _ in similar[:3])}. "
+            f"Возможно, следует сменить параметры или тикер."
         )
-        embedder = Embedder()
-        emb = await embedder.embed(candidates_text)
-        async with _async_session_factory() as db:
-            store = RegistryStore(db)
-            similar = await store.search_similar(emb, threshold=0.92, limit=5)
-        if similar:
-            result["similar_runs"] = [
-                {
-                    "family": h.family, "ticker": h.ticker,
-                    "similarity": round(sim, 3),
-                    "previous_dsr": h.dsr,
-                    "previous_sharpe": h.sharpe,
-                    "run_id": str(h.run_id),
-                }
-                for h, sim in similar
-            ]
-            result["dedup_warning"] = (
-                f"Похожие гипотезы уже проверялись: "
-                f"{', '.join(f'{h.family}/{h.ticker}' for h, _ in similar[:3])}. "
-                f"Возможно, следует сменить параметры или тикер."
-            )
-    except Exception:
-        # БД недоступна — пропускаем дедуп (не критично для основного прогона)
-        logger.warning("plan_research dedup skipped (DB unavailable)", exc_info=True)
 
     return result
 

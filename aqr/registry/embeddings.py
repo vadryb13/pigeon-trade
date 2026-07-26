@@ -1,17 +1,12 @@
 """Генерация эмбеддингов для гипотез.
 
-Основной путь: OpenAI `text-embedding-3-small` (1536d, $0.02/1M tokens).
-Fallback: детерминистический hash-вектор (при отсутствии OPENAI_API_KEY
-или ошибке API). Размерность совпадает с Vector(1536) в `Hypothesis.embedding`.
+Только OpenAI `text-embedding-3-small` (1536d, $0.02/1M tokens).
+Строгий режим: API-ключ обязателен (из per-session credentials через
+ContextVar, либо явный параметр). Без ключа → raise. Без fallback.
 """
-
 from __future__ import annotations
 
-import hashlib
-import os
 from typing import TYPE_CHECKING
-
-import numpy as np
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
@@ -21,7 +16,7 @@ EMBEDDING_DIM = 1536
 
 
 class Embedder:
-    """Обёртка над embeddings-API. Lazy init клиента."""
+    """Обёртка над OpenAI embeddings-API. Lazy init клиента."""
 
     def __init__(
         self,
@@ -29,24 +24,25 @@ class Embedder:
         api_key: str | None = None,
     ) -> None:
         self.model = model
-        self._api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self._api_key = api_key
         self._client: AsyncOpenAI | None = None
 
-    def has_api(self) -> bool:
-        """True, если есть API-ключ И пакет `openai` установлен.
+        # Если ключ не передан явно — берём из per-session ContextVar
+        if self._api_key is None:
+            self._api_key = self._api_key_from_context()
 
-        Проверяем `import openai` чтобы не вернуть True, когда
-        ключ есть, но пакет не установлен (тогда первый вызов
-        упадёт с ImportError, который мы глотаем в `embed()` —
-        выглядит как молчаливый fallback на hash).
-        """
-        if not self._api_key:
-            return False
-        try:
-            import openai  # noqa: F401
-        except ImportError:
-            return False
-        return True
+    @staticmethod
+    def _api_key_from_context() -> str:
+        """Получить OpenAI API key из ContextVar credentials."""
+        from aqr.agent.context import current_credentials
+
+        creds = current_credentials()
+        if creds is None:
+            raise RuntimeError(
+                "Embedder: OPENAI_API_KEY not provided and no session "
+                "credentials in context. Configure via /chat/{token}/settings."
+            )
+        return creds.openai_api_key
 
     @staticmethod
     def hypothesis_to_text(family: str, ticker: str, params: dict) -> str:
@@ -57,13 +53,8 @@ class Embedder:
         return f"{family} on {ticker}: {params_str}".strip(": ")
 
     async def embed(self, text: str) -> list[float]:
-        """Эмбеддинг строки. OpenAI если есть ключ, иначе hash-fallback."""
-        if self.has_api():
-            try:
-                return await self._embed_openai(text)
-            except Exception:
-                pass
-        return self.hash_embedding(text)
+        """Эмбеддинг строки через OpenAI. Raise на любой ошибке."""
+        return await self._embed_openai(text)
 
     async def embed_hypothesis(
         self, family: str, ticker: str, params: dict
@@ -75,6 +66,7 @@ class Embedder:
         """Через OpenAI API (lazy import)."""
         if self._client is None:
             from openai import AsyncOpenAI
+
             self._client = AsyncOpenAI(api_key=self._api_key)
 
         resp = await self._client.embeddings.create(
@@ -84,28 +76,10 @@ class Embedder:
         return list(resp.data[0].embedding)
 
     @staticmethod
-    def hash_embedding(text: str, dim: int = EMBEDDING_DIM) -> list[float]:
-        """Детерминистический SHA256-based вектор длиной dim.
-
-        Расширяем хэш через повторение до dim байт, нормализуем до unit-вектора.
-        Семантики нет, но гарантируется:
-        - одинаковый текст → одинаковый вектор (для дедупликации)
-        - разный текст → разные векторы (с высокой вероятностью)
-        - L2 норма = 1.0
-        """
-        digest = hashlib.sha256(text.encode("utf-8")).digest()
-        # Каждый sha256-дайджест = 32 байта; нам нужно 1536/32 = 48 повторений
-        repeats = (dim // 32) + 1
-        raw = (digest * repeats)[:dim]
-        arr = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 127.5) / 127.5
-        norm = float(np.linalg.norm(arr))
-        if norm > 0:
-            arr = arr / norm
-        return arr.tolist()
-
-    @staticmethod
     def cosine_similarity(a: list[float], b: list[float]) -> float:
         """Косинусное сходство двух векторов (float)."""
+        import numpy as np
+
         va = np.asarray(a, dtype=np.float32)
         vb = np.asarray(b, dtype=np.float32)
         denom = float(np.linalg.norm(va) * np.linalg.norm(vb))
