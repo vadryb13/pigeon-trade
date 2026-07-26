@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: aqr-pg
+    environment:
+      POSTGRES_PASSWORD: aqr
+      POSTGRES_DB: aqr
+    ports:
+      - "5432:5432"
+    volumes:
+      - aqr-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aqr"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+volumes:
+  aqr-pg-data:
