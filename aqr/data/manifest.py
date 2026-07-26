@@ -3,6 +3,11 @@ Data manifest — записывает точно какие данные исп
 
 Позволяет reproducibility: код + seed + data_manifest_hash полностью
 восстанавливают результат.
+
+⚠️ EXPERIMENTAL: модуль не подключён к pipeline (см. DEAD-1 в REVIEW.md).
+Импорт через `aqr.data.DataManifest` — lazy (`aqr/data/__init__.py`
+через `__getattr__`). Не используйте в production-коде до того, как
+будет спроектирован PIT-конвейер для дивидендов/сплитов.
 """
 from __future__ import annotations
 
@@ -12,7 +17,6 @@ from datetime import datetime
 from pathlib import Path
 
 import duckdb
-
 
 MANIFEST_SCHEMA = """
 CREATE TABLE IF NOT EXISTS data_snapshots (
