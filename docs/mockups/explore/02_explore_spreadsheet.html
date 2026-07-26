@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>AQR · /explore · spreadsheet</title>
+<style>
+:root {
+  --bg: #1a1d23;
+  --bg-elev: #242830;
+  --panel: #23272f;
+  --text: #e7e9ee;
+  --muted: #8a93a3;
+  --accent: #7cb7ff;
+  --green: #51cf66;
+  --yellow: #ffd43b;
+  --red: #ff6b6b;
+  --border: #2f343c;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; color: var(--accent); }
+.tabs { display: flex; gap: 16px; font-size: 13px; color: var(--muted); }
+.tabs span { cursor: pointer; padding: 6px 10px; }
+.tabs span.active { color: var(--text); border-bottom: 2px solid var(--accent); }
+.stats {
+  display: flex; align-items: center; gap: 24px;
+  padding: 12px 24px; font-size: 12px; color: var(--muted);
+  border-bottom: 1px solid var(--border); flex-wrap: wrap;
+}
+.stats strong { color: var(--text); font-weight: 500; }
+.chip { background: var(--bg-elev); padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border); }
+.chip strong { color: var(--accent); }
+.filterbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 24px; border-bottom: 1px solid var(--border);
+  font-size: 13px; color: var(--muted);
+}
+.filter-pill {
+  padding: 4px 12px; border-radius: 16px; background: var(--bg-elev);
+  border: 1px solid var(--border); cursor: pointer;
+}
+.filter-pill.active { background: var(--accent); color: #0a1828; border-color: var(--accent); }
+.btn {
+  padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg-elev); color: var(--text); cursor: pointer; font: inherit; font-size: 13px;
+}
+.btn-primary { background: var(--accent); color: #0a1828; border-color: var(--accent); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: var(--bg-elev); font-weight: 500; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--bg-elev); }
+tbody tr.selected { background: rgba(124, 183, 255, 0.08); outline: 2px solid var(--accent); outline-offset: -2px; }
+tbody tr.locked { opacity: 0.6; }
+.id { font-family: ui-monospace, "SF Mono", monospace; color: var(--muted); }
+.name { color: var(--accent); }
+.sh { color: var(--text); font-variant-numeric: tabular-nums; }
+.sh-num { font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+.tag-screening { background: rgba(124, 183, 255, 0.18); color: var(--accent); }
+.tag-validating { background: rgba(255, 212, 59, 0.18); color: var(--yellow); }
+.tag-approved { background: rgba(81, 207, 102, 0.18); color: var(--green); }
+.tag-rejected { background: rgba(255, 107, 107, 0.18); color: var(--red); }
+.tag-idea { background: rgba(138, 147, 163, 0.18); color: var(--muted); }
+.up { color: var(--green); }
+.down { color: var(--red); }
+.owner { color: var(--muted); font-size: 12px; }
+.toolbar-row {
+  display: flex; gap: 8px;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.presence {
+  margin-left: auto;
+  font-size: 12px; color: var(--muted);
+  display: flex; gap: 12px; align-items: center;
+}
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>AQR · Explore</h1>
+  <div class="tabs">
+    <span class="active">Spreadsheet</span>
+    <span>Activity</span>
+    <span>By ticker</span>
+    <span style="background: var(--accent); color: #0a1828; padding: 6px 12px; border-radius: 6px; font-weight: 600;">+ New</span>
+  </div>
+</div>
+
+<div class="stats">
+  <span>Explored <strong>47</strong> hypotheses</span>
+  <span>Win rate <strong>26%</strong> (12 approved / 47 total)</span>
+  <span>Last activity <strong>2h ago</strong> · bob viewed #42</span>
+  <span class="chip"><strong>5</strong> with new runs today</span>
+</div>
+
+<div class="filterbar">
+  <strong style="color: var(--muted);">Filter by status:</strong>
+  <span class="filter-pill active">All (47)</span>
+  <span class="filter-pill">Screening (8)</span>
+  <span class="filter-pill">Validating (2)</span>
+  <span class="filter-pill">Approved (12)</span>
+  <span class="filter-pill">Rejected (15)</span>
+  <span class="filter-pill">Archived (10)</span>
+  <span style="margin-left: auto;">
+    <span class="filter-pill">Sort: DSR ▾</span>
+    <span class="filter-pill">Ticker ▾</span>
+  </span>
+</div>
+
+<div class="toolbar-row">
+  <button class="btn btn-primary">Run screening (3 selected)</button>
+  <button class="btn">AI: suggest variants</button>
+  <button class="btn">Archive</button>
+  <div class="presence">
+    <span><span class="dot"></span> alice online</span>
+    <span><span class="dot" style="background: var(--yellow);"></span> bob online · viewing #42</span>
+  </div>
+</div>
+
+<table>
+<thead>
+<tr>
+  <th style="width: 30px;"><input type="checkbox"></th>
+  <th>id</th>
+  <th>status</th>
+  <th>hypothesis</th>
+  <th>ticker</th>
+  <th style="text-align: right;">Sharpe</th>
+  <th style="text-align: right;">DSR</th>
+  <th style="text-align: right;">PBO</th>
+  <th>stability</th>
+  <th>owner</th>
+  <th>updated</th>
+</tr>
+</thead>
+<tbody>
+<tr class="selected">
+  <td><input type="checkbox" checked></td>
+  <td class="id">#42</td>
+  <td><span class="tag tag-approved">approved</span></td>
+  <td class="name">SMA5/50 momentum</td>
+  <td>SBER</td>
+  <td class="sh-num" style="text-align: right;">1.85</td>
+  <td class="sh-num up" style="text-align: right;">0.96 ✓</td>
+  <td class="sh-num" style="text-align: right;">0.28</td>
+  <td>✓ 4/4</td>
+  <td class="owner">alice</td>
+  <td class="owner">4h ago</td>
+</tr>
+<tr class="selected">
+  <td><input type="checkbox" checked></td>
+  <td class="id">#38</td>
+  <td><span class="tag tag-screening">screening</span></td>
+  <td class="name">RSI(14)+ATR</td>
+  <td>GAZP</td>
+  <td class="sh-num" style="text-align: right;">1.10</td>
+  <td class="sh-num" style="text-align: right;">0.71</td>
+  <td class="sh-num" style="text-align: right;">0.45</td>
+  <td>✗ 2/4</td>
+  <td class="owner">bob</td>
+  <td class="owner">2h ago</td>
+</tr>
+<tr class="selected">
+  <td><input type="checkbox" checked></td>
+  <td class="id">#35</td>
+  <td><span class="tag tag-rejected">rejected</span></td>
+  <td class="name">BBands breakout</td>
+  <td>LKOH</td>
+  <td class="sh-num down" style="text-align: right;">-0.30</td>
+  <td class="sh-num down" style="text-align: right;">0.12</td>
+  <td class="sh-num down" style="text-align: right;">0.62</td>
+  <td>—</td>
+  <td class="owner">alice</td>
+  <td class="owner">3d ago</td>
+</tr>
+<tr>
+  <td><input type="checkbox"></td>
+  <td class="id">#29</td>
+  <td><span class="tag tag-validating">validating</span></td>
+  <td class="name">Mom-divergence</td>
+  <td>SBER</td>
+  <td class="sh-num" style="text-align: right;">?</td>
+  <td class="sh-num" style="text-align: right;">—</td>
+  <td class="sh-num" style="text-align: right;">—</td>
+  <td>1/4 ◐</td>
+  <td class="owner">alice</td>
+  <td class="owner">1d ago</td>
+</tr>
+<tr class="locked">
+  <td><input type="checkbox" disabled></td>
+  <td class="id">#51</td>
+  <td><span class="tag tag-idea">idea</span></td>
+  <td class="name">Donchian 20/55</td>
+  <td>GAZP</td>
+  <td class="sh-num" style="text-align: right;">—</td>
+  <td class="sh-num" style="text-align: right;">—</td>
+  <td class="sh-num" style="text-align: right;">—</td>
+  <td>—</td>
+  <td class="owner">alice 🔒</td>
+  <td class="owner">just now</td>
+</tr>
+<tr>
+  <td><input type="checkbox"></td>
+  <td class="id">#20</td>
+  <td><span class="tag tag-approved">approved</span></td>
+  <td class="name">Z-score mean-reversion</td>
+  <td>SBER</td>
+  <td class="sh-num" style="text-align: right;">1.42</td>
+  <td class="sh-num" style="text-align: right;">0.89</td>
+  <td class="sh-num" style="text-align: right;">0.31</td>
+  <td>✓ 4/4</td>
+  <td class="owner">alice</td>
+  <td class="owner">5d ago</td>
+</tr>
+</tbody>
+</table>
+
+<div style="padding: 14px 24px; font-size: 12px; color: var(--muted);">
+  Compare overlay: rows #42, #38, #35 highlighted for side-by-side review.
+  Locked row (#51): alice editing — read-only for others.
+</div>
+
+</body>
+</html>

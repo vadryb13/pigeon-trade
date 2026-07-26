@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>AQR · Notebook #42</title>
+<style>
+:root {
+  --bg: #1a1d23;
+  --bg-elev: #242830;
+  --panel: #23272f;
+  --text: #e7e9ee;
+  --muted: #8a93a3;
+  --accent: #7cb7ff;
+  --green: #51cf66;
+  --yellow: #ffd43b;
+  --red: #ff6b6b;
+  --border: #2f343c;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { margin: 0; font-size: 14px; color: var(--muted); }
+.topbar h1 a { color: var(--accent); text-decoration: none; }
+.title-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 24px 32px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.title-row h2 { margin: 0; font-size: 24px; font-weight: 500; }
+.tag { display: inline-block; padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 500; }
+.tag-approved { background: rgba(81, 207, 102, 0.18); color: var(--green); }
+.tag-screening { background: rgba(124, 183, 255, 0.18); color: var(--accent); }
+.tabs { display: flex; gap: 4px; padding: 0 32px; border-bottom: 1px solid var(--border); }
+.tabs span { padding: 10px 16px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+.tabs span.active { color: var(--text); border-bottom-color: var(--accent); }
+.content { max-width: 900px; margin: 0 auto; padding: 24px 32px; }
+.section { margin-bottom: 28px; }
+.section h3 { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; }
+.params {
+  display: grid; grid-template-columns: 140px 1fr 1fr;
+  gap: 8px 16px; align-items: center;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px;
+}
+.params label { color: var(--muted); font-size: 13px; }
+.params .input {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 4px; font: inherit; font-size: 14px;
+}
+.params .readonly { padding: 6px 0; font-family: ui-monospace, monospace; color: var(--text); }
+.metrics {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; margin-bottom: 20px;
+}
+.metric { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.metric .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.metric .value { font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.metric .verdict { font-size: 11px; margin-top: 2px; }
+.metric .verdict.good { color: var(--green); }
+.metric .verdict.warn { color: var(--yellow); }
+.metric .verdict.bad { color: var(--red); }
+.btn {
+  padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg-elev); color: var(--text); cursor: pointer; font: inherit; font-size: 13px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover { background: var(--border); }
+.btn-primary { background: var(--accent); color: #0a1828; border-color: var(--accent); font-weight: 600; }
+.btn-success { background: var(--green); color: #0a1828; border-color: var(--green); font-weight: 600; }
+.btn-danger { background: var(--red); color: white; border-color: var(--red); font-weight: 600; }
+.btn-ai { background: linear-gradient(135deg, var(--accent), #9d4edd); color: white; border-color: transparent; font-weight: 500; }
+.actionbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+.code {
+  background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 14px;
+  font-family: ui-monospace, "SF Mono", monospace; font-size: 13px;
+  color: #c9d1d9; white-space: pre; overflow-x: auto;
+}
+.code .kw { color: #ff7b72; }
+.code .str { color: #a5d6ff; }
+.code .com { color: #8b949e; }
+.history-row {
+  display: flex; gap: 16px; padding: 10px 0;
+  border-bottom: 1px dashed var(--border); font-size: 13px;
+}
+.history-row:last-child { border-bottom: 0; }
+.history-row .ts { color: var(--muted); white-space: nowrap; min-width: 110px; }
+.history-row .who { min-width: 60px; font-weight: 500; }
+.history-row .what { color: var(--text); }
+.history-row .metrics { grid-template-columns: 1fr; padding: 0; margin: 0; }
+.history-row .diff { color: var(--accent); font-family: ui-monospace, monospace; font-size: 12px; }
+.window {
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 12px; margin-bottom: 4px;
+  display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+}
+.window.ok { border-left: 3px solid var(--green); }
+.window.fail { border-left: 3px solid var(--red); }
+.window .period { color: var(--muted); }
+.chart-placeholder {
+  height: 220px; background: linear-gradient(180deg, rgba(124,183,255,0.08), transparent);
+  border: 1px solid var(--border); border-radius: 8px; position: relative; overflow: hidden;
+}
+.chart-placeholder::after {
+  content: ""; position: absolute; bottom: 30px; left: 0; right: 0; height: 1px;
+  background: var(--muted); opacity: 0.3;
+}
+.chart-svg { width: 100%; height: 100%; }
+.lock-banner {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255, 212, 59, 0.1); border: 1px solid var(--yellow);
+  border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px;
+  color: var(--yellow);
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1><a href="#">AQR</a> · /explore</h1>
+  <div style="font-size: 12px; color: var(--muted);">alice online · bob online</div>
+</div>
+
+<div class="title-row">
+  <h2>#42 — SMA5/50 momentum on SBER</h2>
+  <span class="tag tag-approved">approved ✓</span>
+  <span style="color: var(--muted);">owner: alice</span>
+  <span style="color: var(--muted);">created 12d ago · updated 4h ago</span>
+</div>
+
+<div class="lock-banner">
+  🔒 <strong>You are editing this hypothesis.</strong> Auto-release in <strong>4:32</strong> if idle.
+</div>
+
+<div class="tabs">
+  <span>Code</span>
+  <span>Backtest</span>
+  <span class="active">Equity Curve</span>
+  <span>History</span>
+  <span>💬 Discussion (3)</span>
+</div>
+
+<div class="content">
+
+  <div class="section">
+    <h3>Parameters</h3>
+    <div class="params">
+      <label>family</label>
+      <div class="readonly">momentum</div>
+      <span style="color: var(--muted); font-size: 12px;">—</span>
+
+      <label>ticker</label>
+      <div class="readonly">SBER</div>
+      <span style="color: var(--muted); font-size: 12px;">MOEX · shares · TQBR</span>
+
+      <label>fast (period)</label>
+      <input class="input" value="5" style="max-width: 80px;">
+      <input class="input" value="50" style="max-width: 80px; display:none;">
+      <label>fast</label>
+      <input class="input" value="5" style="max-width: 80px;">
+      <span style="color: var(--accent); font-size: 12px;">← edit me</span>
+
+      <label>slow</label>
+      <input class="input" value="50" style="max-width: 80px;">
+      <span style="color: var(--muted); font-size: 12px;">days (SMA lookback)</span>
+
+      <label>period</label>
+      <div class="readonly">2022-01-03 → 2024-12-30</div>
+      <span style="color: var(--muted); font-size: 12px;">1420 daily bars</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Metrics · latest run @ 2026-07-28 11:42</h3>
+    <div class="metrics">
+      <div class="metric">
+        <div class="label">Sharpe</div>
+        <div class="value">1.85</div>
+        <div class="verdict good">strong</div>
+      </div>
+      <div class="metric">
+        <div class="label">DSR</div>
+        <div class="value">0.96</div>
+        <div class="verdict good">≥ 0.95 — significant</div>
+      </div>
+      <div class="metric">
+        <div class="label">PBO</div>
+        <div class="value">0.28</div>
+        <div class="verdict good">≤ 0.30 — robust</div>
+      </div>
+      <div class="metric">
+        <div class="label">MaxDD</div>
+        <div class="value">-12.3%</div>
+        <div class="verdict warn">acceptable</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Actions</h3>
+    <div class="actionbar">
+      <button class="btn">Save & Re-run backtest</button>
+      <button class="btn">Archive</button>
+      <button class="btn btn-ai">🤖 AI: explain risk</button>
+      <button class="btn btn-ai">🤖 AI: suggest variants</button>
+      <button class="btn btn-ai">🤖 AI: generate report</button>
+      <span style="color: var(--muted); font-size: 12px; margin-left: 12px;">
+        (🤖 buttons appear only at the relevant status stage)
+      </span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Stability · 4-window cross-validation</h3>
+    <div class="window ok"><span class="period">2022-01 → 2022-12</span><span>Sharpe 1.62 · DSR 0.91 ✓</span></div>
+    <div class="window ok"><span class="period">2022-07 → 2023-06</span><span>Sharpe 1.95 · DSR 0.96 ✓</span></div>
+    <div class="window ok"><span class="period">2023-01 → 2023-12</span><span>Sharpe 1.78 · DSR 0.93 ✓</span></div>
+    <div class="window ok"><span class="period">2023-07 → 2024-06</span><span>Sharpe 2.05 · DSR 0.98 ✓</span></div>
+    <div style="margin-top: 8px; color: var(--green); font-size: 13px;">Score: 4/4 stable</div>
+  </div>
+
+  <div class="section">
+    <h3>Equity curve · strategy vs buy-and-hold</h3>
+    <div class="chart-placeholder">
+      <svg class="chart-svg" viewBox="0 0 800 200" preserveAspectRatio="none">
+        <path d="M0,180 L60,160 L120,150 L180,140 L240,130 L300,110 L360,100 L420,80 L480,60 L540,55 L600,45 L660,40 L720,30 L780,20" stroke="#7cb7ff" stroke-width="2" fill="none"/>
+        <path d="M0,180 L60,170 L120,165 L180,160 L240,158 L300,155 L360,150 L420,148 L480,145 L540,142 L600,138 L660,135 L720,130 L780,128" stroke="#8a93a3" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
+      </svg>
+    </div>
+    <div style="margin-top: 6px; font-size: 12px; color: var(--muted);">
+      Cumulative log-return: <span style="color: var(--accent);">strategy</span> vs <span style="color: var(--muted);">buy-and-hold SBER</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Audit trail (5 events)</h3>
+    <div class="history-row">
+      <div class="ts">2026-07-26 14:23</div>
+      <div class="who">alice</div>
+      <div class="what">created <span class="diff">{fast:5, slow:50}</span> → backtest: Sharpe 1.85 / DSR 0.96 / PBO 0.28</div>
+    </div>
+    <div class="history-row">
+      <div class="ts">2026-07-27 09:11</div>
+      <div class="who">bob</div>
+      <div class="what">comment: "стабильно в боковике, проверить на 4ч"</div>
+    </div>
+    <div class="history-row">
+      <div class="ts">2026-07-28 11:42</div>
+      <div class="who">alice</div>
+      <div class="what">edit: <span class="diff">{fast:5→8, slow:50→55}</span> → re-run: Sharpe 1.92 / DSR 0.94 / PBO 0.32</div>
+    </div>
+    <div class="history-row">
+      <div class="ts">2026-07-30 16:05</div>
+      <div class="who">alice</div>
+      <div class="what">status: screening → approved ✓</div>
+    </div>
+    <div class="history-row">
+      <div class="ts">2026-08-01 09:14</div>
+      <div class="who">alice</div>
+      <div class="what">edit: starting (auto-locked 4:32 ago)</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

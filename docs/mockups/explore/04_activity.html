@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>AQR · Activity feed</title>
+<style>
+:root {
+  --bg: #1a1d23;
+  --bg-elev: #242830;
+  --panel: #23272f;
+  --text: #e7e9ee;
+  --muted: #8a93a3;
+  --accent: #7cb7ff;
+  --green: #51cf66;
+  --yellow: #ffd43b;
+  --red: #ff6b6b;
+  --border: #2f343c;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; color: var(--accent); }
+.tabs { display: flex; gap: 16px; font-size: 13px; color: var(--muted); }
+.tabs span { cursor: pointer; padding: 6px 10px; }
+.tabs span.active { color: var(--text); border-bottom: 2px solid var(--accent); }
+.filterbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 32px; font-size: 13px; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.filter-pill {
+  padding: 4px 12px; border-radius: 16px; background: var(--bg-elev);
+  border: 1px solid var(--border); cursor: pointer;
+}
+.filter-pill.active { background: var(--accent); color: #0a1828; border-color: var(--accent); }
+.feed { max-width: 800px; margin: 24px auto; padding: 0 24px; }
+.day-divider {
+  font-size: 12px; color: var(--muted); margin: 24px 0 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.day-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.event {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px; margin-bottom: 8px;
+  display: grid; grid-template-columns: 120px 1fr; gap: 16px;
+  align-items: start;
+}
+.event .ts { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; padding-top: 2px; }
+.event .who { font-weight: 500; }
+.event-icon {
+  display: inline-block; width: 16px; text-align: center; margin-right: 6px;
+}
+.act-create { color: var(--accent); }
+.act-edit { color: var(--yellow); }
+.act-rerun { color: var(--accent); }
+.act-approve { color: var(--green); }
+.act-reject { color: var(--red); }
+.act-comment { color: var(--muted); }
+.act-ai { color: #c084fc; }
+.act-status { color: var(--muted); }
+.diff { font-family: ui-monospace, monospace; color: var(--accent); font-size: 12px; }
+.metrics { color: var(--text); font-size: 13px; }
+.metrics .num { font-variant-numeric: tabular-nums; }
+.metrics .up { color: var(--green); }
+.metrics .down { color: var(--red); }
+.target { color: var(--accent); font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>AQR · Explore</h1>
+  <div class="tabs">
+    <span>Spreadsheet</span>
+    <span class="active">Activity</span>
+    <span>By ticker</span>
+    <span style="background: var(--accent); color: #0a1828; padding: 6px 12px; border-radius: 6px; font-weight: 600;">+ New</span>
+  </div>
+</div>
+
+<div class="filterbar">
+  <strong>Filter by event type:</strong>
+  <span class="filter-pill active">All</span>
+  <span class="filter-pill">created</span>
+  <span class="filter-pill">edit</span>
+  <span class="filter-pill">re-run</span>
+  <span class="filter-pill">approve</span>
+  <span class="filter-pill">reject</span>
+  <span class="filter-pill">comments</span>
+  <span class="filter-pill">AI</span>
+  <span style="margin-left: auto;">Last 7 days · 23 events</span>
+</div>
+
+<div class="feed">
+
+  <div class="day-divider">Today · 2026-08-01</div>
+
+  <div class="event">
+    <div class="ts">09:14</div>
+    <div>
+      <span class="act-rerun"><span class="event-icon">⟳</span>re-run</span>
+      <span class="who">alice</span> на <span class="target">#42 SMA5/50 on SBER</span>
+      <div class="metrics">
+        <span class="diff">{fast:5, slow:50}</span> →
+        Sharpe <span class="num up">1.92</span> · DSR 0.94 · PBO 0.32
+      </div>
+    </div>
+  </div>
+
+  <div class="event">
+    <div class="ts">08:45</div>
+    <div>
+      <span class="act-status"><span class="event-icon">⤴</span>status</span>
+      <span class="who">system</span> на <span class="target">#38 RSI(14)+ATR on GAZP</span>
+      <div class="metrics">idea → screening (auto: backtest Sharpe 1.10 > 0)</div>
+    </div>
+  </div>
+
+  <div class="event">
+    <div class="ts">08:12</div>
+    <div>
+      <span class="act-ai"><span class="event-icon">🤖</span>AI</span>
+      <span class="who">bob</span> на <span class="target">#38</span>
+      <div class="metrics">
+        <em>AI: explain risk</em> — PBO 0.45 на OOS: стратегия выглядит
+        устойчивой в тренде, но проседает на боковике. Рекомендую
+        добавить фильтр волатильности или остановить research.
+      </div>
+    </div>
+  </div>
+
+  <div class="day-divider">Yesterday · 2026-07-31</div>
+
+  <div class="event">
+    <div class="ts">22:18</div>
+    <div>
+      <span class="act-comment"><span class="event-icon">💬</span>comment</span>
+      <span class="who">bob</span> на <span class="target">#42</span>
+      <div class="metrics">"стабильно в боковике, проверить на 4ч"</div>
+    </div>
+  </div>
+
+  <div class="event">
+    <div class="ts">16:05</div>
+    <div>
+      <span class="act-approve"><span class="event-icon">✓</span>approve</span>
+      <span class="who">alice</span> на <span class="target">#42 SMA5/50 on SBER</span>
+      <div class="metrics">screening → approved ✓</div>
+    </div>
+  </div>
+
+  <div class="event">
+    <div class="ts">14:23</div>
+    <div>
+      <span class="act-create"><span class="event-icon">+</span>created</span>
+      <span class="who">alice</span> на <span class="target">#42 SMA5/50 momentum on SBER</span>
+      <div class="diff">{family: momentum, ticker: SBER, fast: 5, slow: 50}</div>
+    </div>
+  </div>
+
+  <div class="day-divider">3 days ago · 2026-07-29</div>
+
+  <div class="event">
+    <div class="ts">11:42</div>
+    <div>
+      <span class="act-edit"><span class="event-icon">✎</span>edit + re-run</span>
+      <span class="who">alice</span> на <span class="target">#42</span>
+      <div class="metrics">
+        <span class="diff">{fast:5→8, slow:50→55}</span> →
+        Sharpe <span class="num up">1.92</span> · DSR 0.94 · PBO 0.32
+      </div>
+    </div>
+  </div>
+
+  <div class="event">
+    <div class="ts">09:11</div>
+    <div>
+      <span class="act-reject"><span class="event-icon">✗</span>reject</span>
+      <span class="who">alice</span> на <span class="target">#35 BBands breakout on LKOH</span>
+      <div class="metrics">
+        "PBO 0.62 — переобучен на коротком периоде, не подходит для live"
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
