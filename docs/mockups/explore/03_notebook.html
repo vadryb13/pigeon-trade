@@ -4,26 +4,40 @@
 <meta charset="utf-8">
 <title>AQR · Hypothesis #42 · Notebook + History + Graphs</title>
 <style>
-:root {
-  --bg: #1a1d23;
-  --bg-elev: #242830;
-  --panel: #23272f;
-  --text: #e7e9ee;
-  --muted: #8a93a3;
-  --accent: #7cb7ff;
-  --purple: #c084fc;
-  --green: #51cf66;
-  --yellow: #ffd43b;
-  --red: #ff6b6b;
-  --border: #2f343c;
-}
-* { box-sizing: border-box; }
-html, body {
-  margin: 0; padding: 0;
-  background: var(--bg); color: var(--text);
-  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-.topbar {
+  :root {
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --text: #111827;
+    --muted: #6b7280;
+    --subtle: #9ca3af;
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+    --green: #047857;
+    --green-bg: #ecfdf5;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+    --yellow: #92400e;
+    --yellow-bg: #fffbeb;
+    --purple: #6d28d9;
+    --purple-bg: #f5f3ff;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --code-bg: #f3f4f6;
+    --row-alt: #f9fafb;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+      system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+  }
+  .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 24px; background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
@@ -494,7 +508,7 @@ html, body {
 
 <!-- Lock banner появляется когда alice редактирует. Bob (read-only) видит это. -->
 <div class="lock-banner">
-  🔒 <strong>alice is editing this hypothesis.</strong>
+   <strong>alice is editing this hypothesis.</strong>
   Auto-release in <strong>4:32</strong> if idle.
   <span style="margin-left: auto;">
     <button class="btn" style="background: transparent; padding: 4px 12px; font-size: 12px; color: var(--yellow); border-color: var(--yellow);">Notify when free</button>
@@ -502,14 +516,14 @@ html, body {
 </div>
 
 <div class="tabs">
-  <button class="active" data-tab="notebook">💬 Workspace <span class="badge">live</span></button>
-  <button data-tab="history">📜 History <span class="badge">7</span></button>
-  <button data-tab="graphs">📈 Graphs <span class="badge">3</span></button>
+  <button class="active" data-tab="notebook"> Workspace <span class="badge">live</span></button>
+  <button data-tab="history"> History <span class="badge">7</span></button>
+  <button data-tab="graphs"> Graphs <span class="badge">3</span></button>
   <a href="04_graphs_full.html" style="
     padding: 10px 16px; font-size: 13px; color: var(--accent);
     text-decoration: none; display: inline-flex; align-items: center;
     gap: 6px; margin-left: auto;
-  ">📊 Full graphs →</a>
+  "> Full graphs →</a>
 </div>
 
 <div class="content">
@@ -542,7 +556,7 @@ html, body {
           <span>tf <strong style="color: var(--text);">H1</strong></span>
           <span>2023-01 → <strong style="color: var(--text);">2025-01</strong></span>
           <span>fast=8 slow=50</span>
-          <span>cross-val <strong style="color: var(--green);">4/4 ✓</strong></span>
+          <span>cross-val <strong style="color: var(--green);">4/4 </strong></span>
           <span>Sharpe <strong style="color: var(--text);">2.14</strong></span>
         </div>
       </div>
@@ -553,7 +567,7 @@ html, body {
         <!-- AI PROPOSAL (single initiator) -->
         <div class="bubble bubble-ai">
           <div class="bubble-head">
-            <span class="avatar">🤖</span>
+            <span class="avatar"></span>
             <span class="who">editor-agent</span>
             <span class="ts">3 min ago</span>
           </div>
@@ -562,8 +576,8 @@ html, body {
             фишках через SMA-кроссовер (5/50, H1). Устойчива в направленном
             рынке нефтегаза и банков; главный риск — flat-периоды.
             <br><br>
-            <strong>Context:</strong> 📰 8 новостей · 📊 2 похожих (#3 sh=1.10,
-            #19 sh=0.78) · ⏱ research ≈ 1m 12s
+            <strong>Context:</strong> 8 новостей · 2 похожих (#3 sh=1.10,
+            #19 sh=0.78) · took research ≈ 1m 12s
             <br><br>
             <em>3 варианта под эту идею:</em>
 
@@ -574,7 +588,7 @@ html, body {
                 <div class="metrics"><span class="badge">1.89</span><span style="color: var(--muted);">PBO 0.31</span></div>
               </div>
               <div class="variant recommended">
-                <div class="name">B · balanced ✓</div>
+                <div class="name">B · balanced </div>
                 <div class="params">fast=8 · slow=50 · tf=H1</div>
                 <div class="metrics"><span class="badge">2.14</span><span style="color: var(--green);">PBO 0.24</span></div>
               </div>
@@ -599,13 +613,13 @@ html, body {
 
         <!-- system event -->
         <div class="bubble bubble-system">
-          ⚙ alice → /run B · 4-window cross-val · ожидайте ~2m
+           alice → /run B · 4-window cross-val · ожидайте ~2m
         </div>
 
         <!-- analyst-agent postback (handoff visible: editor → analyst) -->
         <div class="bubble bubble-ai">
           <div class="bubble-head">
-            <span class="avatar">🤖</span>
+            <span class="avatar"></span>
             <span class="who">analyst-agent</span>
             <span class="ts">только что</span>
           </div>
@@ -616,7 +630,7 @@ html, body {
               <div class="title">B · fast=8/slow=50/H1 · 2023-01 → 2025-01</div>
               <div class="result-row">
                 <span><span class="label">Sharpe</span> <span class="value">2.14</span></span>
-                <span><span class="label">DSR</span> <span class="value">0.97 ✓</span></span>
+                <span><span class="label">DSR</span> <span class="value">0.97 </span></span>
                 <span><span class="label">PBO</span> <span class="value">0.24</span></span>
                 <span><span class="label">MaxDD</span> <span class="value">-8.9%</span></span>
               </div>
@@ -632,7 +646,7 @@ html, body {
               </div>
             </div>
 
-            Вердикт: 4/4 stable, PBO 0.24 &lt; 0.30. ✅ можно /approve.
+            Вердикт: 4/4 stable, PBO 0.24 &lt; 0.30. можно /approve.
           </div>
         </div>
 
@@ -646,13 +660,13 @@ html, body {
 
         <!-- system postback — handlers pass / narrative saved -->
         <div class="bubble bubble-system">
-          ✓ alice approved · status: screening → approved · hypothesis_event создан
+          alice approved · status: screening → approved · hypothesis_event создан
         </div>
 
         <!-- AI handoff: analyst → writer -->
         <div class="bubble bubble-ai">
           <div class="bubble-head">
-            <span class="avatar">🤖</span>
+            <span class="avatar"></span>
             <span class="who">writer-agent</span>
             <span class="ts">только что</span>
           </div>
@@ -680,7 +694,7 @@ html, body {
             <span><span class="slash">/approve</span> · <span class="slash">/reject</span> · <span class="slash">/run</span> · <span class="slash">/edit</span></span>
             <span><span class="slash">/archive</span> · <span class="slash">/help</span></span>
             <span style="margin-left: auto;">
-              <kbd style="background: var(--bg); padding: 2px 6px; border-radius: 3px;">⌘+Enter</kbd> · Enter — send
+              <kbd style="background: var(--bg); padding: 2px 6px; border-radius: 3px;">Cmd+Enter</kbd> · Enter — send
             </span>
           </div>
         </div>
@@ -688,7 +702,7 @@ html, body {
 
     </div>
 
-  </div>    </div>
+  </div> </div>
 
   </div>
 
@@ -700,14 +714,14 @@ html, body {
 
       <div class="event event-edit">
         <div class="ts">09:14</div>
-        <span class="event-icon">✎</span><span class="who">alice</span><span class="what">edit &amp; re-run ·
+        <span class="event-icon"></span><span class="who">alice</span><span class="what">edit &amp; re-run ·
           <span class="diff">{fast:5→8, slow:50→55}</span> →
           Sharpe <span class="num up">1.92</span> · DSR 0.94 · PBO 0.32</span>
       </div>
 
       <div class="event event-ai">
         <div class="ts">08:12</div>
-        <span class="event-icon">🤖</span><span class="who">alice → AI</span><span class="what">explain risk →
+        <span class="event-icon"></span><span class="who">alice → AI</span><span class="what">explain risk →
           <span class="note">«PBO 0.32 на OOS говорит, что 68% выбранных
           стратегий останутся в верхней половине. Слабое место: не
           проверялось на боковике 2022.»</span></span>
@@ -717,7 +731,7 @@ html, body {
 
       <div class="event event-comment">
         <div class="ts">22:18</div>
-        <span class="event-icon">💬</span><span class="who">bob</span>
+        <span class="event-icon"></span><span class="who">bob</span>
         <span class="what">comment →
           <span class="note">«стабильно в боковике, проверить на 4ч»</span></span>
       </div>
@@ -733,7 +747,7 @@ html, body {
       <div class="event event-rerun">
         <div class="ts">14:23</div>
         <span class="event-icon">⟳</span><span class="who">alice</span><span class="what">re-run →
-          Sharpe <span class="num up">1.85</span> · DSR <span class="up">0.96 ✓</span> · PBO 0.28</span>
+          Sharpe <span class="num up">1.85</span> · DSR <span class="up">0.96 </span> · PBO 0.28</span>
       </div>
 
       <div class="event event-create">
@@ -806,22 +820,22 @@ html, body {
         <div class="window ok">
           <span class="period">2022-01 → 2022-12</span>
           <span>Sharpe 1.62 · DSR 0.91</span>
-          <span class="verdict-ok">✓ pass</span>
+          <span class="verdict-ok">pass</span>
         </div>
         <div class="window ok">
           <span class="period">2022-07 → 2023-06</span>
           <span>Sharpe 1.95 · DSR 0.96</span>
-          <span class="verdict-ok">✓ pass</span>
+          <span class="verdict-ok">pass</span>
         </div>
         <div class="window ok">
           <span class="period">2023-01 → 2023-12</span>
           <span>Sharpe 1.78 · DSR 0.93</span>
-          <span class="verdict-ok">✓ pass</span>
+          <span class="verdict-ok">pass</span>
         </div>
         <div class="window ok">
           <span class="period">2023-07 → 2024-06</span>
           <span>Sharpe 2.05 · DSR 0.98</span>
-          <span class="verdict-ok">✓ pass</span>
+          <span class="verdict-ok">pass</span>
         </div>
         <div style="margin-top: 8px; color: var(--green); font-size: 13px; text-align: right;">
           Score: 4/4 stable

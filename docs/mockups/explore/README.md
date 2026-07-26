@@ -4,14 +4,28 @@ Static HTML-черновики будущего интерфейса `/explore` 
 для quant-гипотез). Не живой код — для обсуждения UX, ревью,
 onboarding новых членов команды.
 
+## Design system (Langfuse-inspired)
+
+- **Light theme** — bg `#fafafa`, panel `#ffffff`. Subtle borders `#e5e7eb`.
+- **No shadows.** Subtle hover via background tint.
+- **Typography** — Inter / system-ui, monospace for params/code.
+- **Status as small pills** — text + 1px border + colored bg-tint.
+- **No emojis anywhere.** Text labels: "Approve" / "Reject" / "Run" / etc.
+  Agent role via small "user" / "editor-agent" labels in bubble head.
+- **Color sparingly** — accent blue, green/red for status, muted gray for
+  secondary text. Lots of white space.
+- **Data-forward** — tables, code blocks, numeric values in tabular-nums.
+- **8px grid radius** for cards, 6px for inputs. Sharp enough to feel
+  professional, soft enough to be friendly.
+
 ## Файлы
 
 | # | Файл | Что показывает |
 |---|---|---|
 | 01 | [`01_explore_empty.html`](01_explore_empty.html) | Empty state — пустой лист после первого деплоя. Number-input для batch count (max 20, default 3). Кнопка «Generate & research in parallel». |
 | 02 | [`02_explore_spreadsheet.html`](02_explore_spreadsheet.html) | Leaderboard из 6 гипотез с разными статусами. Каждая строка кликабельна → открывает `03_notebook.html`. Bulk-select для CSS-overlay compare. Locked-row (`#51`) показывает pessimistic-lock presence. Auto-screening (`#38`) — системное событие, не пользователь. |
-| 03 | [`03_notebook.html`](03_notebook.html) | **Drill-down на одну стратегию.** Tabs: 💬 Workspace (минимальный state card: status chip + active agent + 6 inline-параметров; live chat-thread — это главная surface для всех actions через /approve /reject /run /edit /archive; стадии переключают агента: editor-agent → analyst-agent → writer-agent) · 📜 History · 📈 Graphs (compact). |
-| 04 | [`04_graphs_full.html`](04_graphs_full.html) | **Full graphs page** (отдельная страница, ссылка из Notebook → Graphs tab). TL;DR summary + equity curve (с треугольниками entry/exit) + drawdown + rolling Sharpe + monthly returns heatmap (2 года × 12 месяцев) + 4-window cross-val mini-charts + risk/return scatter по всем гипотезам + distribution daily-returns (с цветовым кодированием sign) + trade analysis (P/L distribution + hold-time). |
+| 03 | [`03_notebook.html`](03_notebook.html) | **Drill-down на одну стратегию.** Tabs: Workspace (минимальный state card: status chip + active agent + 6 inline-параметров; live chat-thread — главная surface для всех actions через /approve /reject /run /edit /archive; стадии переключают агента: editor-agent → analyst-agent → writer-agent) · History · Graphs (compact). |
+| 04 | [`04_graphs_full.html`](04_graphs_full.html) | **Full graphs page** (отдельная страница, ссылка из Notebook → Graphs tab). TL;DR summary + equity curve + drawdown + rolling Sharpe + monthly returns heatmap (2 года × 12 месяцев) + 4-window cross-val mini-charts + risk/return scatter по всем гипотезам + distribution daily-returns (с цветовым кодированием sign) + trade analysis (P/L distribution + hold-time). |
 | 05 | [`05_activity.html`](05_activity.html) | Глобальный activity feed за 7 дней. 7 типов событий (created/edit/rerun/approve/reject/comment/AI/status). Авто-status-изменения помечены actor=system. Filter-chips по типу события. |
 
 ## Как открыть

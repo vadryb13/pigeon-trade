@@ -4,25 +4,40 @@
 <meta charset="utf-8">
 <title>AQR · /explore · spreadsheet</title>
 <style>
-:root {
-  --bg: #1a1d23;
-  --bg-elev: #242830;
-  --panel: #23272f;
-  --text: #e7e9ee;
-  --muted: #8a93a3;
-  --accent: #7cb7ff;
-  --green: #51cf66;
-  --yellow: #ffd43b;
-  --red: #ff6b6b;
-  --border: #2f343c;
-}
-* { box-sizing: border-box; }
-html, body {
-  margin: 0; padding: 0;
-  background: var(--bg); color: var(--text);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-.topbar {
+  :root {
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --text: #111827;
+    --muted: #6b7280;
+    --subtle: #9ca3af;
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+    --green: #047857;
+    --green-bg: #ecfdf5;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+    --yellow: #92400e;
+    --yellow-bg: #fffbeb;
+    --purple: #6d28d9;
+    --purple-bg: #f5f3ff;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --code-bg: #f3f4f6;
+    --row-alt: #f9fafb;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+      system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+  }
+  .topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 24px; background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
@@ -123,7 +138,7 @@ tbody tr.locked { opacity: 0.6; }
 
 <div class="toolbar-row">
   <button class="btn btn-primary">Run screening (3 selected)</button>
-  <button class="btn">AI: suggest variants</button>
+  <button class="btn">Suggest variants</button>
   <button class="btn">Archive</button>
   <div class="presence">
     <span><span class="dot"></span> alice online</span>
@@ -155,9 +170,9 @@ tbody tr.locked { opacity: 0.6; }
   <td class="name">SMA5/50 momentum</td>
   <td>SBER</td>
   <td class="sh-num" style="text-align: right;">1.85</td>
-  <td class="sh-num up" style="text-align: right;">0.96 ✓</td>
+  <td class="sh-num up" style="text-align: right;">0.96 </td>
   <td class="sh-num" style="text-align: right;">0.28</td>
-  <td>✓ 4/4</td>
+  <td>4/4</td>
   <td class="owner">alice</td>
   <td class="owner">4h ago</td>
 </tr>
@@ -170,7 +185,7 @@ tbody tr.locked { opacity: 0.6; }
   <td class="sh-num" style="text-align: right;">1.10</td>
   <td class="sh-num" style="text-align: right;">0.71</td>
   <td class="sh-num" style="text-align: right;">0.45</td>
-  <td>✗ 2/4</td>
+  <td>2/4</td>
   <td class="owner">bob</td>
   <td class="owner">2h ago</td>
 </tr>
@@ -210,7 +225,7 @@ tbody tr.locked { opacity: 0.6; }
   <td class="sh-num" style="text-align: right;">—</td>
   <td class="sh-num" style="text-align: right;">—</td>
   <td>—</td>
-  <td class="owner">alice 🔒</td>
+  <td class="owner">alice </td>
   <td class="owner">just now</td>
 </tr>
 <tr onclick="location='03_notebook.html'" style="cursor: pointer;">
@@ -222,7 +237,7 @@ tbody tr.locked { opacity: 0.6; }
   <td class="sh-num" style="text-align: right;">1.42</td>
   <td class="sh-num" style="text-align: right;">0.89</td>
   <td class="sh-num" style="text-align: right;">0.31</td>
-  <td>✓ 4/4</td>
+  <td>4/4</td>
   <td class="owner">alice</td>
   <td class="owner">5d ago</td>
 </tr>
