@@ -4,10 +4,52 @@
 """
 from __future__ import annotations
 
+import sys
+import types
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _stable_secret(monkeypatch):
+    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
+
+
+@pytest.fixture
+def with_credentials():
+    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.registry import DecryptedSettings
+
+    creds = DecryptedSettings(
+        session_id="alice",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_api_key="sk-ant-fake",
+        openai_api_key="sk-oai-fake",
+        invest_token="t.INVEST_TOKEN_fake",
+        invest_sandbox=True,
+    )
+    token = set_credentials(creds)
+    yield creds
+    reset_credentials(token)
+
+
+@pytest.fixture
+def fake_openai(monkeypatch):
+    """Мок openai.AsyncOpenAI — embeddings возвращает [0.1] * 1536."""
+
+    class _FakeEmbeddingsAPI:
+        async def create(self, *, model, input):
+            return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+
+    class _FakeAsyncOpenAI:
+        def __init__(self, **kw):
+            self.embeddings = _FakeEmbeddingsAPI()
+
+    fake = types.ModuleType("openai")
+    fake.AsyncOpenAI = _FakeAsyncOpenAI
+    monkeypatch.setitem(sys.modules, "openai", fake)
 
 
 @pytest.fixture
@@ -118,7 +160,9 @@ class TestGetRun:
 
 class TestRunAndPersist:
     @pytest.mark.asyncio
-    async def test_persist_writes_metrics_and_hypotheses(self, mock_db, monkeypatch):
+    async def test_persist_writes_metrics_and_hypotheses(
+        self, mock_db, monkeypatch, with_credentials, fake_openai
+    ):
         """При успешном executor — пишет metrics + embedding + hypothesis."""
         from aqr.pipeline.api import _run_and_persist
         from aqr.pipeline.executor import BacktestResult, PipelineResult

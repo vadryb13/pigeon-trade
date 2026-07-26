@@ -45,6 +45,11 @@ workspace/data/raw/
 workspace/data/curated/
 workspace/traces/
 
+# Legacy OHLCV cache (был до миграции на ~/.aqr/)
+data/ohlcv_cache.duckdb
+data/*.duckdb
+data/*.duckdb.wal
+
 # Environment
 .env
 .env.local

@@ -13,6 +13,30 @@ import pytest
 duckdb = pytest.importorskip("duckdb")
 
 
+@pytest.fixture(autouse=True)
+def _stable_secret(monkeypatch):
+    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
+
+
+@pytest.fixture
+def with_credentials():
+    """Устанавливает credentials в ContextVar, очищает на teardown."""
+    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.registry import DecryptedSettings
+
+    creds = DecryptedSettings(
+        session_id="alice",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_api_key="sk-ant-fake",
+        openai_api_key="sk-oai-fake",
+        invest_token="t.INVEST_TOKEN_fake",
+        invest_sandbox=True,
+    )
+    token = set_credentials(creds)
+    yield creds
+    reset_credentials(token)
+
+
 # ── Fixtures ────────────────────────────────────────────────────
 
 @pytest.fixture
@@ -153,16 +177,18 @@ class TestOhlcvCacheBasics:
 
 class TestLoadPricesIntegration:
     @pytest.mark.asyncio
-    async def test_load_prices_uses_cache_on_second_call(self, tmp_path, monkeypatch):
-        """Второй вызов load_prices для того же тикера не ходит в MOEX."""
+    async def test_load_prices_uses_cache_on_second_call(
+        self, tmp_path, monkeypatch, with_credentials
+    ):
+        """Второй вызов load_prices для того же тикера не ходит в T-Invest."""
         from aqr.data import ohlcv_cache as cache_mod
 
         # Подменяем кэш на временную директорию
         db_path = tmp_path / "test_load_cache.duckdb"
 
-        # Подменяем MOEXAdapter так, чтобы первый вызов ходил в фиктивный MOEX,
-        # второй — выкинул ошибку (если попадёт в MOEX — тест провалится)
-        from aqr.data import moex as moex_mod
+        # Подменяем TInvestAdapter так, чтобы первый вызов ходил в фиктивный
+        # T-Invest, второй — выкинул ошибку (если попадёт — тест провалится)
+        from aqr.data import tinvest as tinvest_mod
 
         call_count = {"n": 0}
 
@@ -173,7 +199,7 @@ class TestLoadPricesIntegration:
             def candles(self, ticker, *a, **kw):
                 call_count["n"] += 1
                 if call_count["n"] > 1:
-                    raise RuntimeError("Second call should hit cache, not MOEX")
+                    raise RuntimeError("Second call should hit cache, not T-Invest")
                 rng = np.random.default_rng(hash(ticker) % (2**32))
                 n = 500
                 r = rng.normal(0.0005, 0.015, n)
@@ -183,10 +209,9 @@ class TestLoadPricesIntegration:
                     "open": px, "high": px * 1.001,
                     "low": px * 0.999, "close": px,
                     "volume": np.zeros(n, dtype=np.int64),
-                    "value": np.zeros(n),
                 }, index=idx)
 
-        monkeypatch.setattr(moex_mod, "MOEXAdapter", _CountingAdapter)
+        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _CountingAdapter)
 
         # Подменяем путь к кэшу через monkeypatch
         original_init = cache_mod.OhlcvCache.__init__
@@ -198,15 +223,15 @@ class TestLoadPricesIntegration:
 
         from aqr.tools.core import load_prices
 
-        # Первый вызов — идёт в MOEX, заполняет кэш
+        # Первый вызов — идёт в T-Invest, заполняет кэш
         r1 = await load_prices(tickers=["SBER"], start_date="2023-01-02", end_date="2024-12-31")
         assert "SBER" in r1
         assert call_count["n"] == 1
 
-        # Второй вызов — должен использовать кэш (MOEX не вызывается)
+        # Второй вызов — должен использовать кэш (T-Invest не вызывается)
         r2 = await load_prices(tickers=["SBER"], start_date="2023-01-02", end_date="2024-12-31")
         assert "SBER" in r2
-        assert call_count["n"] == 1  # всё ещё 1, второй запрос не пошёл в MOEX
+        assert call_count["n"] == 1  # всё ещё 1, второй запрос не пошёл в T-Invest
 
         # Данные идентичны
         assert r1["SBER"] == r2["SBER"]

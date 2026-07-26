@@ -11,6 +11,30 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _stable_secret(monkeypatch):
+    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
+
+
+@pytest.fixture
+def with_credentials():
+    """Устанавливает credentials в ContextVar, очищает на teardown."""
+    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.registry import DecryptedSettings
+
+    creds = DecryptedSettings(
+        session_id="alice",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_api_key="sk-ant-fake",
+        openai_api_key="sk-oai-fake",
+        invest_token="t.INVEST_TOKEN_fake",
+        invest_sandbox=True,
+    )
+    token = set_credentials(creds)
+    yield creds
+    reset_credentials(token)
+
 # ── Fake models ──────────────────────────────────────────────────
 
 
@@ -182,7 +206,9 @@ class TestListRuns:
 
 class TestSearchSimilarHypotheses:
     @pytest.mark.asyncio
-    async def test_returns_similar_above_threshold(self, mock_db_and_store, monkeypatch):
+    async def test_returns_similar_above_threshold(
+        self, mock_db_and_store, monkeypatch, with_credentials
+    ):
         from aqr.registry.embeddings import Embedder
         from aqr.tools import storage
 
@@ -225,7 +251,9 @@ class TestSearchSimilarHypotheses:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_find_duplicates_works(self, mock_db_and_store, monkeypatch):
+    async def test_find_duplicates_works(
+        self, mock_db_and_store, monkeypatch, with_credentials
+    ):
         """find_duplicates — обёртка над search_similar с высоким порогом."""
         from aqr.registry.embeddings import Embedder
         from aqr.tools import storage
