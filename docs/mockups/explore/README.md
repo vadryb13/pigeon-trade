@@ -10,7 +10,7 @@ onboarding новых членов команды.
 |---|---|---|
 | 01 | [`01_explore_empty.html`](01_explore_empty.html) | Empty state — пустой лист после первого деплоя. Number-input для batch count (max 20, default 3). Кнопка «Generate & research in parallel». |
 | 02 | [`02_explore_spreadsheet.html`](02_explore_spreadsheet.html) | Leaderboard из 6 гипотез с разными статусами. Каждая строка кликабельна → открывает `03_notebook.html`. Bulk-select для CSS-overlay compare. Locked-row (`#51`) показывает pessimistic-lock presence. Auto-screening (`#38`) — системное событие, не пользователь. |
-| 03 | [`03_notebook.html`](03_notebook.html) | **Drill-down на одну стратегию.** Combined view с 3 tabs: 📓 Notebook (research log + editable params + AI rationale + lazy action bar) · 📜 History (timeline: created/edit/rerun/approve/comment/AI/system) · 📈 Graphs (equity curve SVG + drawdown + 4-window stability). Status: `screening` с активным исследовательским логом. Lock-banner сверху при presence-edit. |
+| 03 | [`03_notebook.html`](03_notebook.html) | **Drill-down на одну стратегию.** Combined view с 3 tabs: 💬 Workspace (status panel для decision support: editable params, metrics, stability, quick actions; live chat-thread где работа + adjustments; sticky composer с /run /edit /approve /help) · 📜 History (timeline) · 📈 Graphs (equity/drawdown/stability). Status: `screening` с активным диалогом. Lock-banner сверху при presence-edit. |
 | 04 | [`04_activity.html`](04_activity.html) | Глобальный activity feed за 7 дней. 7 типов событий (created/edit/rerun/approve/reject/comment/AI/status). Авто-status-изменения помечены actor=system. Filter-chips по типу события. |
 
 ## Как открыть
