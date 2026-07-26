@@ -133,7 +133,7 @@ tbody tr.locked { opacity: 0.6; }
 
 <table>
 <thead>
-<tr>
+<tr onclick="location='03_notebook.html'" style="cursor: pointer;">
   <th style="width: 30px;"><input type="checkbox"></th>
   <th>id</th>
   <th>status</th>
@@ -148,8 +148,8 @@ tbody tr.locked { opacity: 0.6; }
 </tr>
 </thead>
 <tbody>
-<tr class="selected">
-  <td><input type="checkbox" checked></td>
+<tr class="selected" onclick="location='03_notebook.html'" style="cursor: pointer;">
+  <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
   <td class="id">#42</td>
   <td><span class="tag tag-approved">approved</span></td>
   <td class="name">SMA5/50 momentum</td>
@@ -161,8 +161,8 @@ tbody tr.locked { opacity: 0.6; }
   <td class="owner">alice</td>
   <td class="owner">4h ago</td>
 </tr>
-<tr class="selected">
-  <td><input type="checkbox" checked></td>
+<tr class="selected" onclick="location='03_notebook.html'" style="cursor: pointer;">
+  <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
   <td class="id">#38</td>
   <td><span class="tag tag-screening">screening</span></td>
   <td class="name">RSI(14)+ATR</td>
@@ -174,8 +174,8 @@ tbody tr.locked { opacity: 0.6; }
   <td class="owner">bob</td>
   <td class="owner">2h ago</td>
 </tr>
-<tr class="selected">
-  <td><input type="checkbox" checked></td>
+<tr class="selected" onclick="location='03_notebook.html'" style="cursor: pointer;">
+  <td><input type="checkbox" checked onclick="event.stopPropagation()"></td>
   <td class="id">#35</td>
   <td><span class="tag tag-rejected">rejected</span></td>
   <td class="name">BBands breakout</td>
@@ -187,8 +187,8 @@ tbody tr.locked { opacity: 0.6; }
   <td class="owner">alice</td>
   <td class="owner">3d ago</td>
 </tr>
-<tr>
-  <td><input type="checkbox"></td>
+<tr onclick="location='03_notebook.html'" style="cursor: pointer;">
+  <td><input type="checkbox" onclick="event.stopPropagation()"></td>
   <td class="id">#29</td>
   <td><span class="tag tag-validating">validating</span></td>
   <td class="name">Mom-divergence</td>
@@ -200,7 +200,7 @@ tbody tr.locked { opacity: 0.6; }
   <td class="owner">alice</td>
   <td class="owner">1d ago</td>
 </tr>
-<tr class="locked">
+<tr class="locked" onclick="location='03_notebook.html'" style="cursor: pointer;">
   <td><input type="checkbox" disabled></td>
   <td class="id">#51</td>
   <td><span class="tag tag-idea">idea</span></td>
@@ -213,8 +213,8 @@ tbody tr.locked { opacity: 0.6; }
   <td class="owner">alice 🔒</td>
   <td class="owner">just now</td>
 </tr>
-<tr>
-  <td><input type="checkbox"></td>
+<tr onclick="location='03_notebook.html'" style="cursor: pointer;">
+  <td><input type="checkbox" onclick="event.stopPropagation()"></td>
   <td class="id">#20</td>
   <td><span class="tag tag-approved">approved</span></td>
   <td class="name">Z-score mean-reversion</td>

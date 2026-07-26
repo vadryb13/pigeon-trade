@@ -8,11 +8,10 @@ onboarding новых членов команды.
 
 | # | Файл | Что показывает |
 |---|---|---|
-| 01 | [`01_explore_empty.html`](01_explore_empty.html) | Empty state — пустой лист после первого деплоя. Один CTA: `+ New hypothesis`. Без templates и без AI (по решению команды). |
-| 02 | [`02_explore_spreadsheet.html`](02_explore_spreadsheet.html) | Leaderboard из 6 гипотез с разными статусами. Bulk-select для CSS-overlay compare. Locked-row (`#51`) показывает pessimistic-lock presence. Auto-screening (`#38`) — системное событие, не пользователь. |
-| 03 | [`03_notebook.html`](03_notebook.html) | Drill-down на `#42`. 5 вкладок (Code / Backtest / Equity Curve / History / Discussion). Equity-кривая inline SVG, stability 4/4, audit trail на 5 событий. Lazy AI-кнопки (`🤖 explain / suggest / report`) появляются только на релевантном шаге status-flow. |
+| 01 | [`01_explore_empty.html`](01_explore_empty.html) | Empty state — пустой лист после первого деплоя. Number-input для batch count (max 20, default 3). Кнопка «Generate & research in parallel». |
+| 02 | [`02_explore_spreadsheet.html`](02_explore_spreadsheet.html) | Leaderboard из 6 гипотез с разными статусами. Каждая строка кликабельна → открывает `03_notebook.html`. Bulk-select для CSS-overlay compare. Locked-row (`#51`) показывает pessimistic-lock presence. Auto-screening (`#38`) — системное событие, не пользователь. |
+| 03 | [`03_notebook.html`](03_notebook.html) | **Drill-down на одну стратегию.** Combined view с 3 tabs: 📓 Notebook (research log + editable params + AI rationale + lazy action bar) · 📜 History (timeline: created/edit/rerun/approve/comment/AI/system) · 📈 Graphs (equity curve SVG + drawdown + 4-window stability). Status: `screening` с активным исследовательским логом. Lock-banner сверху при presence-edit. |
 | 04 | [`04_activity.html`](04_activity.html) | Глобальный activity feed за 7 дней. 7 типов событий (created/edit/rerun/approve/reject/comment/AI/status). Авто-status-изменения помечены actor=system. Filter-chips по типу события. |
-| 05 | [`05_explore_new.html`](05_explore_new.html) | Следующий шаг после клика `Generate 3 hypotheses in parallel`. **Batch notebook:** каждая гипотеза в изолированной ячейке — AI делает research (Browser → Analyst → Editor) и формулирует экономическую гипотезу. Ячейки в 3 состояниях: `● researching` (лог шагов с pulse-анимацией) / `✓ ready pending review` (editable поля + rationale) / `○ queued`. Каждая подтверждается отдельно → попадает в spreadsheet как `idea`. |
 
 ## Как открыть
 
@@ -42,35 +41,42 @@ xdg-open docs/mockups/explore/02_explore_spreadsheet.html
 - как единственный источник правды для v0.4 — правила и flows в
   AGENTS.md → раздел "UX-flow (Phase 1 v0.4)"
 
-## UX-flow создания гипотез (v0.4 Phase 1)
+## UX-flow создания и drill-down (v0.4 Phase 1)
 
 ```
-   /explore (empty)
+   /explore (empty, count input + 'Generate & research')
        │
-       │ [+ Generate 3 hypotheses in parallel] ← batch-kомпонент: 1-5 ячеек
+       │  AI создаёт N изолированных ячеек в worktree-like песочницах:
+       │  Browser-agent (поиск новостей/фундаментала)
+       │  → Analyst-agent (похожие гипотезы через find_duplicates)
+       │  → Editor-agent (формулирует economic hypothesis + params)
        ▼
-   /explore/new (batch notebook)
+   Research log live-streaming в Notebook tab ячейки
        │
-       ├─ Cell 1: ● researching (Browser → Analyst → Editor, лог шагов)
-       ├─ Cell 2: ✓ ready pending review (editable поля + rationale)
-       ├─ Cell 3: ○ queued
-       └─ [+ Add another hypothesis]
-       │
-       │ каждая подтверждается отдельно:
-       │   [✓ Confirm & add] → spreadsheet row со статусом `idea`
-       │   [🔄 Regenerate]  → перезапуск AI-агентов в этой ячейке
-       │   [✗ Reject]       → удаляется без записи в spreadsheet
+       │  ✓ Confirm в каждой ячейке → spreadsheet row со статусом `idea`
+       │  🔄 Regenerate         → перезапуск AI-agent'ов в ячейке
+       │  ✗ Reject              → удаляется без записи
        ▼
-   /explore (spreadsheet · N новых rows)
+   /explore (spreadsheet)
+       │
+       │  клик по любой строке → 03_notebook.html (combined view)
+       ▼
+   /explore/{id} (3 tabs)
+       │
+       ├─ 📓 Notebook: research log + editable params + AI rationale
+       │           + metrics panel + lazy actions (status-зависимые)
+       ├─ 📜 History: timeline всех событий гипотезы
+       └─ 📈 Graphs: equity curve SVG + drawdown + 4-window stability
 ```
 
-**Изоляция ячеек:** каждый AI-агент (Browser/Analyst/Editor) работает в
+**Кликабельная строка:** `02_explore_spreadsheet.html` → клик по `<tr>`
+→ `onclick="location='03_notebook.html'"`. Checkbox использует
+`onclick="event.stopPropagation()"` чтобы bulk-select не открывал
+notebook.
+
+**Изоляция ячеек при batch-создании:** каждый AI-агент работает в
 отдельной песочнице. Падение в одной ячейке не ломает другие.
-Ячейка идёт в статус `failed` и не блокирует batch.
-
-**Параллелизм:** количество параллельных AI-задач ограничено
-concurrency-лимитом (default 3). Если выбрать 5 — две встанут в очередь
-(visual: queued state с estimated wait).
+Concurrency-limit default 3, остальные встают в `queued` state.
 
 **После confirm гипотезы** в spreadsheet она появляется со специальной
 подсветкой «new» и авто-переходит в `screening` после первого

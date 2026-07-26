@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>AQR · Notebook #42</title>
+<title>AQR · Hypothesis #42 · Notebook + History + Graphs</title>
 <style>
 :root {
   --bg: #1a1d23;
@@ -11,6 +11,7 @@
   --text: #e7e9ee;
   --muted: #8a93a3;
   --accent: #7cb7ff;
+  --purple: #c084fc;
   --green: #51cf66;
   --yellow: #ffd43b;
   --red: #ff6b6b;
@@ -27,245 +28,569 @@ html, body {
   padding: 14px 24px; background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
 }
-.topbar h1 { margin: 0; font-size: 14px; color: var(--muted); }
-.topbar h1 a { color: var(--accent); text-decoration: none; }
+.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; color: var(--accent); }
+.crumbs { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.crumbs a { color: var(--accent); text-decoration: none; }
+.crumbs span { margin: 0 8px; }
+
+/* ── Title row ── */
 .title-row {
-  display: flex; align-items: center; gap: 16px;
-  padding: 24px 32px 16px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 22px 32px 16px;
   border-bottom: 1px solid var(--border);
 }
-.title-row h2 { margin: 0; font-size: 24px; font-weight: 500; }
-.tag { display: inline-block; padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 500; }
-.tag-approved { background: rgba(81, 207, 102, 0.18); color: var(--green); }
+.title-row h2 { margin: 0; font-size: 22px; font-weight: 500; }
+.title-meta { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.tag { padding: 4px 12px; border-radius: 14px; font-size: 12px; font-weight: 500; }
+.tag-idea { background: rgba(138, 147, 163, 0.18); color: var(--muted); }
 .tag-screening { background: rgba(124, 183, 255, 0.18); color: var(--accent); }
-.tabs { display: flex; gap: 4px; padding: 0 32px; border-bottom: 1px solid var(--border); }
-.tabs span { padding: 10px 16px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
-.tabs span.active { color: var(--text); border-bottom-color: var(--accent); }
-.content { max-width: 900px; margin: 0 auto; padding: 24px 32px; }
+.tag-validating { background: rgba(255, 212, 59, 0.18); color: var(--yellow); }
+.tag-approved { background: rgba(81, 207, 102, 0.18); color: var(--green); }
+.tag-rejected { background: rgba(255, 107, 107, 0.18); color: var(--red); }
+.tag-pending { background: rgba(192, 132, 252, 0.18); color: var(--purple); }
+
+/* ── Lock banner ── */
+.lock-banner {
+  margin: 16px 32px 0;
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255, 212, 59, 0.08); border: 1px solid var(--yellow);
+  border-radius: 6px; padding: 10px 14px; font-size: 13px; color: var(--yellow);
+}
+.lock-banner strong { color: var(--yellow); }
+
+/* ── Tabs ── */
+.tabs {
+  display: flex; gap: 2px;
+  padding: 0 32px; margin-top: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.tabs button {
+  background: transparent; border: 0; color: var(--muted);
+  padding: 10px 18px; font: inherit; font-size: 13px; cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.tabs button .badge {
+  background: var(--bg-elev); color: var(--muted);
+  padding: 1px 6px; border-radius: 8px; font-size: 11px; margin-left: 6px;
+}
+.tabs button.active .badge { color: var(--accent); }
+
+.content { max-width: 960px; margin: 0 auto; padding: 24px 32px 80px; }
+
+/* ──── Notebook tab ──── */
 .section { margin-bottom: 28px; }
-.section h3 { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; }
+.section h3 {
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.7px; margin: 0 0 12px;
+}
+
+/* research log (пока hypothesis не подтверждена) */
+.research-log {
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 18px;
+}
+.research-step {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 5px 0; font-size: 13px; color: var(--text);
+}
+.research-step .icon {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px;
+}
+.research-step.done .icon { background: rgba(81, 207, 102, 0.18); color: var(--green); }
+.research-step.active .icon {
+  background: rgba(192, 132, 252, 0.18); color: var(--purple);
+  animation: pulse 1.4s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:.6} 50%{opacity:1} }
+
+/* editable params */
 .params {
-  display: grid; grid-template-columns: 140px 1fr 1fr;
-  gap: 8px 16px; align-items: center;
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 16px;
+  display: grid; grid-template-columns: 130px 1fr; gap: 10px 16px;
+  align-items: center; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px 18px; margin-bottom: 12px;
 }
-.params label { color: var(--muted); font-size: 13px; }
-.params .input {
+.params label { font-size: 13px; color: var(--muted); }
+.params input, .params select {
   background: var(--bg); border: 1px solid var(--border); color: var(--text);
-  padding: 6px 10px; border-radius: 4px; font: inherit; font-size: 14px;
+  padding: 6px 10px; border-radius: 5px; font: inherit; font-size: 14px;
 }
-.params .readonly { padding: 6px 0; font-family: ui-monospace, monospace; color: var(--text); }
+.params input.wide { flex: 1; }
+.params input.short { width: 100px; }
+.params .pencil {
+  background: transparent; border: 0; color: var(--muted);
+  cursor: pointer; font-size: 13px; padding: 4px;
+}
+.params .pencil:hover { color: var(--accent); }
+.params .pc {
+  display: inline-block; background: var(--bg); border: 1px solid var(--border);
+  padding: 3px 10px; border-radius: 4px; margin-right: 6px;
+  font-family: ui-monospace, monospace; font-size: 12px;
+}
+.params .pc .pk { color: var(--muted); }
+.params .pc .pv { color: var(--accent); }
+
+/* metrics panel */
 .metrics {
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 12px; margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
 }
 .metric { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
 .metric .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 .metric .value { font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .metric .verdict { font-size: 11px; margin-top: 2px; }
-.metric .verdict.good { color: var(--green); }
-.metric .verdict.warn { color: var(--yellow); }
-.metric .verdict.bad { color: var(--red); }
+.verdict.good { color: var(--green); }
+.verdict.warn { color: var(--yellow); }
+.verdict.bad { color: var(--red); }
+
+/* AI rationale (research context) */
+.rationale {
+  background: rgba(192, 132, 252, 0.06); border-left: 3px solid var(--purple);
+  padding: 12px 14px; margin: 12px 0; border-radius: 0 6px 6px 0;
+  font-size: 13px;
+}
+.rationale strong { color: var(--purple); }
+.rationale .meta { color: var(--muted); font-size: 11px; margin-top: 6px; }
+
+/* action bar */
+.actionbar {
+  display: flex; gap: 8px; flex-wrap: wrap; padding: 14px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+}
 .btn {
   padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border);
-  background: var(--bg-elev); color: var(--text); cursor: pointer; font: inherit; font-size: 13px;
-  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-elev); color: var(--text); cursor: pointer;
+  font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;
 }
 .btn:hover { background: var(--border); }
-.btn-primary { background: var(--accent); color: #0a1828; border-color: var(--accent); font-weight: 600; }
 .btn-success { background: var(--green); color: #0a1828; border-color: var(--green); font-weight: 600; }
 .btn-danger { background: var(--red); color: white; border-color: var(--red); font-weight: 600; }
-.btn-ai { background: linear-gradient(135deg, var(--accent), #9d4edd); color: white; border-color: transparent; font-weight: 500; }
-.actionbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
-.code {
-  background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 14px;
-  font-family: ui-monospace, "SF Mono", monospace; font-size: 13px;
-  color: #c9d1d9; white-space: pre; overflow-x: auto;
+.btn-ai { background: linear-gradient(135deg, var(--purple), var(--accent)); color: white; border-color: transparent; font-weight: 500; }
+
+/* ──── History tab ──── */
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before {
+  content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px;
+  width: 1px; background: var(--border);
 }
-.code .kw { color: #ff7b72; }
-.code .str { color: #a5d6ff; }
-.code .com { color: #8b949e; }
-.history-row {
-  display: flex; gap: 16px; padding: 10px 0;
-  border-bottom: 1px dashed var(--border); font-size: 13px;
+.event {
+  position: relative; padding: 10px 0 10px 0;
+  font-size: 13px; line-height: 1.5;
 }
-.history-row:last-child { border-bottom: 0; }
-.history-row .ts { color: var(--muted); white-space: nowrap; min-width: 110px; }
-.history-row .who { min-width: 60px; font-weight: 500; }
-.history-row .what { color: var(--text); }
-.history-row .metrics { grid-template-columns: 1fr; padding: 0; margin: 0; }
-.history-row .diff { color: var(--accent); font-family: ui-monospace, monospace; font-size: 12px; }
-.window {
-  background: var(--bg-elev); border: 1px solid var(--border);
-  border-radius: 6px; padding: 8px 12px; margin-bottom: 4px;
-  display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+.event::before {
+  content: ""; position: absolute; left: -21px; top: 16px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--bg-elev); border: 2px solid var(--border);
 }
-.window.ok { border-left: 3px solid var(--green); }
-.window.fail { border-left: 3px solid var(--red); }
-.window .period { color: var(--muted); }
-.chart-placeholder {
-  height: 220px; background: linear-gradient(180deg, rgba(124,183,255,0.08), transparent);
-  border: 1px solid var(--border); border-radius: 8px; position: relative; overflow: hidden;
-}
-.chart-placeholder::after {
-  content: ""; position: absolute; bottom: 30px; left: 0; right: 0; height: 1px;
-  background: var(--muted); opacity: 0.3;
-}
-.chart-svg { width: 100%; height: 100%; }
-.lock-banner {
+.event-create::before { background: var(--accent); border-color: var(--accent); }
+.event-edit::before { background: var(--yellow); border-color: var(--yellow); }
+.event-rerun::before { background: var(--purple); border-color: var(--purple); }
+.event-approve::before { background: var(--green); border-color: var(--green); }
+.event-reject::before { background: var(--red); border-color: var(--red); }
+.event-comment::before { background: var(--muted); border-color: var(--muted); }
+.event-ai::before { background: #c084fc; border-color: #c084fc; }
+.event-status::before { background: var(--muted); border-color: var(--muted); }
+
+.event .ts { color: var(--muted); font-size: 11px; font-family: ui-monospace, monospace; }
+.event .who { font-weight: 500; color: var(--text); margin-right: 8px; }
+.event-icon { margin-right: 8px; font-size: 12px; }
+.event .what { color: var(--text); margin-top: 4px; }
+.event .diff { font-family: ui-monospace, monospace; color: var(--accent); font-size: 12px; }
+.event .metrics { display: inline; gap: 0; grid-template-columns: none; padding: 0; margin: 0; }
+.event .num { font-variant-numeric: tabular-nums; }
+.event .up { color: var(--green); }
+.event .down { color: var(--red); }
+.event .target { color: var(--accent); font-family: ui-monospace, monospace; }
+.event .note { color: var(--muted); font-style: italic; }
+
+.day-divider {
+  font-size: 12px; color: var(--muted); margin: 18px 0 8px;
   display: flex; align-items: center; gap: 12px;
-  background: rgba(255, 212, 59, 0.1); border: 1px solid var(--yellow);
-  border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px;
-  color: var(--yellow);
 }
+.day-divider::before, .day-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+/* ──── Graphs tab ──── */
+.graph-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 20px; margin-bottom: 16px;
+}
+.graph-card h4 {
+  margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--text);
+}
+.graph-card .subtitle { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.chart {
+  background: linear-gradient(180deg, rgba(124,183,255,0.06), transparent);
+  border: 1px solid var(--border); border-radius: 6px; padding: 12px;
+  height: 220px; position: relative; overflow: hidden;
+}
+.chart svg { width: 100%; height: 100%; display: block; }
+.chart-legend {
+  display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted);
+}
+.legend-dot { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 6px; }
+
+.stability {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.stability .window {
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 14px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px;
+}
+.stability .window.ok { border-left: 3px solid var(--green); }
+.stability .window.fail { border-left: 3px solid var(--red); }
+.stability .period { color: var(--muted); }
+.stability .result { font-variant-numeric: tabular-nums; }
+.stability .verdict-ok { color: var(--green); }
+.stability .verdict-fail { color: var(--red); }
+
+.graph-empty {
+  text-align: center; padding: 60px 20px; color: var(--muted);
+  font-size: 13px; line-height: 1.6;
+}
+.graph-empty .icon {
+  font-size: 32px; opacity: 0.4; margin-bottom: 12px; display: block;
+}
+
+/* ──── Pending confirm panel (для ячеек из /explore/new) ──── */
+.confirm-panel {
+  border: 2px solid var(--purple); border-radius: 10px;
+  background: rgba(192, 132, 252, 0.04); padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.confirm-panel h3 { color: var(--purple); }
+.confirm-panel .note {
+  color: var(--muted); font-size: 12px; margin: 8px 0 14px;
+}
+
+/* tab-conditional visibility */
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <h1><a href="#">AQR</a> · /explore</h1>
-  <div style="font-size: 12px; color: var(--muted);">alice online · bob online</div>
+  <div>
+    <h1><a href="#">AQR</a></h1>
+    <div class="crumbs">
+      <a href="#">/explore</a><span>›</span><strong>#42 SMA5/50 momentum on SBER</strong>
+    </div>
+  </div>
+  <div style="font-size: 12px; color: var(--muted);">
+    alice online · bob online (viewing this)
+  </div>
 </div>
 
 <div class="title-row">
   <h2>#42 — SMA5/50 momentum on SBER</h2>
-  <span class="tag tag-approved">approved ✓</span>
-  <span style="color: var(--muted);">owner: alice</span>
-  <span style="color: var(--muted);">created 12d ago · updated 4h ago</span>
+  <span class="tag tag-approved">screening</span>
+  <div class="title-meta">
+    <span>owner: <strong style="color: var(--text);">alice</strong></span>
+    <span>created 12d ago</span>
+    <span>updated 4h ago</span>
+    <span>7 backtests run</span>
+  </div>
 </div>
 
+<!-- Lock banner появляется когда alice редактирует. Bob (read-only) видит это. -->
 <div class="lock-banner">
-  🔒 <strong>You are editing this hypothesis.</strong> Auto-release in <strong>4:32</strong> if idle.
+  🔒 <strong>alice is editing this hypothesis.</strong>
+  Auto-release in <strong>4:32</strong> if idle.
+  <span style="margin-left: auto;">
+    <button class="btn" style="background: transparent; padding: 4px 12px; font-size: 12px; color: var(--yellow); border-color: var(--yellow);">Notify when free</button>
+  </span>
 </div>
 
 <div class="tabs">
-  <span>Code</span>
-  <span>Backtest</span>
-  <span class="active">Equity Curve</span>
-  <span>History</span>
-  <span>💬 Discussion (3)</span>
+  <button class="active" data-tab="notebook">📓 Notebook <span class="badge">live</span></button>
+  <button data-tab="history">📜 History <span class="badge">7</span></button>
+  <button data-tab="graphs">📈 Graphs <span class="badge">3</span></button>
 </div>
 
 <div class="content">
 
-  <div class="section">
-    <h3>Parameters</h3>
-    <div class="params">
-      <label>family</label>
-      <div class="readonly">momentum</div>
-      <span style="color: var(--muted); font-size: 12px;">—</span>
+  <!-- ═══════════════ NOTEBOOK TAB (live work) ═══════════════ -->
+  <div data-pane="notebook" class="tab-pane active">
 
-      <label>ticker</label>
-      <div class="readonly">SBER</div>
-      <span style="color: var(--muted); font-size: 12px;">MOEX · shares · TQBR</span>
-
-      <label>fast (period)</label>
-      <input class="input" value="5" style="max-width: 80px;">
-      <input class="input" value="50" style="max-width: 80px; display:none;">
-      <label>fast</label>
-      <input class="input" value="5" style="max-width: 80px;">
-      <span style="color: var(--accent); font-size: 12px;">← edit me</span>
-
-      <label>slow</label>
-      <input class="input" value="50" style="max-width: 80px;">
-      <span style="color: var(--muted); font-size: 12px;">days (SMA lookback)</span>
-
-      <label>period</label>
-      <div class="readonly">2022-01-03 → 2024-12-30</div>
-      <span style="color: var(--muted); font-size: 12px;">1420 daily bars</span>
-    </div>
-  </div>
-
-  <div class="section">
-    <h3>Metrics · latest run @ 2026-07-28 11:42</h3>
-    <div class="metrics">
-      <div class="metric">
-        <div class="label">Sharpe</div>
-        <div class="value">1.85</div>
-        <div class="verdict good">strong</div>
-      </div>
-      <div class="metric">
-        <div class="label">DSR</div>
-        <div class="value">0.96</div>
-        <div class="verdict good">≥ 0.95 — significant</div>
-      </div>
-      <div class="metric">
-        <div class="label">PBO</div>
-        <div class="value">0.28</div>
-        <div class="verdict good">≤ 0.30 — robust</div>
-      </div>
-      <div class="metric">
-        <div class="label">MaxDD</div>
-        <div class="value">-12.3%</div>
-        <div class="verdict warn">acceptable</div>
+    <!-- Research log (виден только пока hypothesis в pending или сразу после создания) -->
+    <div class="section research-log-section">
+      <h3>Research log · AI работает над этой гипотезой</h3>
+      <div class="research-log" id="research-log">
+        <div class="research-step done">
+          <span class="icon">✓</span>
+          <span><b>Browser:</b> ищу RSI/momentum на SBER, GAZP, LKOH — 8 новостей, 12 статей (32s)</span>
+        </div>
+        <div class="research-step done">
+          <span class="icon">✓</span>
+          <span><b>Analyst:</b> найдены похожие гипотезы #3 (momentum SBER sharpe 1.10), #19 (BBands LKOH sharpe 0.78)</span>
+        </div>
+        <div class="research-step done">
+          <span class="icon">✓</span>
+          <span><b>Editor:</b> сформулирована экономическая гипотеза «momentum на голубых фишках через SMA-кроссовер»</span>
+        </div>
+        <div class="research-step done">
+          <span class="icon">✓</span>
+          <span><b>Editor:</b> параметры {fast=5, slow=50, signal=crossover}, period=2022-01→2024-12, timeframe=D1</span>
+        </div>
+        <div class="research-step active">
+          <span class="icon">●</span>
+          <span><b>Editor:</b> пишет rationale для human review…</span>
+        </div>
+        <div class="research-step pending">
+          <span class="icon">○</span>
+          <span><b>Analyst:</b> запустит первый backtest после ✓ Confirm</span>
+        </div>
       </div>
     </div>
+
+    <!-- Параметры (editable когда alice держит lock) -->
+    <div class="section">
+      <h3>Parameters <span class="pencil" style="font-weight: normal; margin-left: 8px; font-size: 12px;">✎ edit</span></h3>
+      <div class="params">
+        <label>Name</label>
+        <input class="wide" type="text" value="SMA5/50 momentum on SBER" style="grid-column: 2 / 4;">
+
+        <label>Family</label>
+        <select style="grid-column: 2 / 3;"><option>momentum</option><option>mean_reversion</option><option>breakout</option></select>
+        <button class="pencil" title="AI confidence: high">✎</button>
+
+        <label>Ticker</label>
+        <input class="short" type="text" value="SBER" style="grid-column: 2 / 3;">
+        <button class="pencil" title="AI confidence: high">✎</button>
+
+        <label>Period</label>
+        <input class="short" type="date" value="2022-01-03" style="grid-column: 2 / 3;">
+        <span style="color: var(--muted);">→</span>
+        <input class="short" type="date" value="2024-12-30" style="grid-column: 4 / 5;">
+        <button class="pencil" title="AI: '3 года по умолчанию', проверь если другая логика">⚠</button>
+
+        <label>Timeframe</label>
+        <select class="short" style="grid-column: 2 / 3;"><option>D1</option><option>H1</option><option>W</option></select>
+        <button class="pencil" title="AI: 'дневки' был единственным намёком">⚠</button>
+
+        <label>Params</label>
+        <div style="grid-column: 2 / 5;">
+          <span class="pc"><span class="pk">fast</span><span class="pv">5</span></span>
+          <span class="pc"><span class="pk">slow</span><span class="pv">50</span></span>
+          <span class="pc"><span class="pk">signal</span><span class="pv">crossover</span></span>
+          <button class="pencil" title="AI inferred defaults">✎</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI rationale -->
+    <div class="section">
+      <h3>AI rationale</h3>
+      <div class="rationale">
+        <div>
+          <strong>🧠 Гипотеза:</strong> momentum-стратегия через SMA-кроссовер на голубых
+          фишках исторически показывает устойчивость в периоды направленного движения
+          рынка. Быстрая SMA (5) пересекает медленную (50) снизу → вход в long.
+        </div>
+        <div class="meta">
+          📰 8 новостей прочитано · 📊 2 похожие гипотезы в реестре · ⏱ research ≈ 1m 12s
+        </div>
+      </div>
+    </div>
+
+    <!-- Latest metrics (если уже был хотя бы один backtest) -->
+    <div class="section">
+      <h3>Latest metrics · run @ 2026-07-28 11:42</h3>
+      <div class="metrics">
+        <div class="metric">
+          <div class="label">Sharpe</div>
+          <div class="value">1.92</div>
+          <div class="verdict good">strong</div>
+        </div>
+        <div class="metric">
+          <div class="label">DSR</div>
+          <div class="value">0.94</div>
+          <div class="verdict warn">0.80–0.95 — borderline</div>
+        </div>
+        <div class="metric">
+          <div class="label">PBO</div>
+          <div class="value">0.32</div>
+          <div class="verdict warn">≤ 0.30 = robust</div>
+        </div>
+        <div class="metric">
+          <div class="label">MaxDD</div>
+          <div class="value">-11.4%</div>
+          <div class="verdict good">acceptable</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action bar — кнопки появляются согласно status-flow -->
+    <div class="section">
+      <h3>Actions <span style="font-size: 11px; color: var(--muted); margin-left: 6px;">(lazy — зависят от статуса)</span></h3>
+      <div class="actionbar">
+        <button class="btn">💾 Save &amp; re-run backtest</button>
+        <button class="btn">📁 Archive</button>
+        <button class="btn btn-ai">🤖 AI: validate stability</button>
+        <button class="btn btn-ai">🤖 AI: explain risk</button>
+        <button class="btn btn-ai">🤖 AI: suggest variants</button>
+      </div>
+    </div>
+
+    <!-- Confirm panel — показывается ТОЛЬКО при первом создании (ещё не confirmed) -->
+    <div class="section confirm-panel">
+      <h3>Подтверждение перед добавлением в /explore</h3>
+      <div class="note">
+        Гипотеза будет добавлена со статусом <code style="background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 3px;">idea</code>.
+        После Confirm автоматически запускается первый backtest; при Sharpe > 0
+        статус авто-перейдёт в <code style="background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 3px;">screening</code>.
+      </div>
+      <div class="actionbar" style="background: transparent; border: 0; padding: 0;">
+        <button class="btn btn-danger">✗ Reject</button>
+        <button class="btn">🔄 Regenerate</button>
+        <button class="btn">✎ Edit fields</button>
+        <button class="btn btn-success">✓ Confirm &amp; add to /explore</button>
+      </div>
+    </div>
+
   </div>
 
-  <div class="section">
-    <h3>Actions</h3>
-    <div class="actionbar">
-      <button class="btn">Save & Re-run backtest</button>
-      <button class="btn">Archive</button>
-      <button class="btn btn-ai">🤖 AI: explain risk</button>
-      <button class="btn btn-ai">🤖 AI: suggest variants</button>
-      <button class="btn btn-ai">🤖 AI: generate report</button>
-      <span style="color: var(--muted); font-size: 12px; margin-left: 12px;">
-        (🤖 buttons appear only at the relevant status stage)
-      </span>
+  <!-- ═══════════════ HISTORY TAB ═══════════════ -->
+  <div data-pane="history" class="tab-pane">
+
+    <div class="timeline">
+
+      <div class="day-divider">Today · 2026-08-01</div>
+
+      <div class="event event-edit">
+        <div class="ts">09:14</div>
+        <span class="event-icon">✎</span><span class="who">alice</span><span class="what">edit &amp; re-run ·
+          <span class="diff">{fast:5→8, slow:50→55}</span> →
+          Sharpe <span class="num up">1.92</span> · DSR 0.94 · PBO 0.32</span>
+      </div>
+
+      <div class="event event-ai">
+        <div class="ts">08:12</div>
+        <span class="event-icon">🤖</span><span class="who">alice → AI</span><span class="what">explain risk →
+          <span class="note">«PBO 0.32 на OOS говорит, что 68% выбранных
+          стратегий останутся в верхней половине. Слабое место: не
+          проверялось на боковике 2022.»</span></span>
+      </div>
+
+      <div class="day-divider">Yesterday · 2026-07-31</div>
+
+      <div class="event event-comment">
+        <div class="ts">22:18</div>
+        <span class="event-icon">💬</span><span class="who">bob</span>
+        <span class="what">comment →
+          <span class="note">«стабильно в боковике, проверить на 4ч»</span></span>
+      </div>
+
+      <div class="event event-rerun">
+        <div class="ts">16:34</div>
+        <span class="event-icon">⟳</span><span class="who">alice</span><span class="what">re-run (смена timeframe H1) →
+          Sharpe <span class="num down">0.81</span> · DSR 0.62 → вернул D1</span>
+      </div>
+
+      <div class="day-divider">3 days ago · 2026-07-29</div>
+
+      <div class="event event-rerun">
+        <div class="ts">14:23</div>
+        <span class="event-icon">⟳</span><span class="who">alice</span><span class="what">re-run →
+          Sharpe <span class="num up">1.85</span> · DSR <span class="up">0.96 ✓</span> · PBO 0.28</span>
+      </div>
+
+      <div class="event event-create">
+        <div class="ts">14:18</div>
+        <span class="event-icon">+</span><span class="who">alice</span><span class="what">created via batch
+          (cell #2 of 3) ·
+          <span class="diff">{family:momentum, ticker:SBER, fast:5, slow:50}</span></span>
+      </div>
+
+      <div class="event event-status">
+        <div class="ts">14:14</div>
+        <span class="event-icon">⤴</span><span class="who">system</span><span class="what">status auto →
+          <span class="target">idea → screening</span> (backtest Sharpe 1.85 > 0)</span>
+      </div>
+
+      <div class="day-divider">12 days ago · 2026-07-20</div>
+
+      <div class="event event-status">
+        <div class="ts">11:00</div>
+        <span class="event-icon">⤴</span><span class="who">alice</span><span class="what">created via batch</span>
+      </div>
+
     </div>
+
+    <div style="margin-top: 24px; text-align: center; color: var(--muted); font-size: 12px;">
+      Showing 8 events · <a href="#" style="color: var(--accent);">view all 17 in Activity feed →</a>
+    </div>
+
   </div>
 
-  <div class="section">
-    <h3>Stability · 4-window cross-validation</h3>
-    <div class="window ok"><span class="period">2022-01 → 2022-12</span><span>Sharpe 1.62 · DSR 0.91 ✓</span></div>
-    <div class="window ok"><span class="period">2022-07 → 2023-06</span><span>Sharpe 1.95 · DSR 0.96 ✓</span></div>
-    <div class="window ok"><span class="period">2023-01 → 2023-12</span><span>Sharpe 1.78 · DSR 0.93 ✓</span></div>
-    <div class="window ok"><span class="period">2023-07 → 2024-06</span><span>Sharpe 2.05 · DSR 0.98 ✓</span></div>
-    <div style="margin-top: 8px; color: var(--green); font-size: 13px;">Score: 4/4 stable</div>
-  </div>
+  <!-- ═══════════════ GRAPHS TAB ═══════════════ -->
+  <div data-pane="graphs" class="tab-pane">
 
-  <div class="section">
-    <h3>Equity curve · strategy vs buy-and-hold</h3>
-    <div class="chart-placeholder">
-      <svg class="chart-svg" viewBox="0 0 800 200" preserveAspectRatio="none">
-        <path d="M0,180 L60,160 L120,150 L180,140 L240,130 L300,110 L360,100 L420,80 L480,60 L540,55 L600,45 L660,40 L720,30 L780,20" stroke="#7cb7ff" stroke-width="2" fill="none"/>
-        <path d="M0,180 L60,170 L120,165 L180,160 L240,158 L300,155 L360,150 L420,148 L480,145 L540,142 L600,138 L660,135 L720,130 L780,128" stroke="#8a93a3" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
-      </svg>
+    <div class="graph-card">
+      <h4>Equity curve · strategy vs buy-and-hold</h4>
+      <div class="subtitle">Daily cumulative log-returns, period 2022-01-03 → 2024-12-30, 1420 bars</div>
+      <div class="chart">
+        <svg viewBox="0 0 800 200" preserveAspectRatio="none">
+          <!-- Buy & hold baseline -->
+          <path d="M0,180 L100,165 L200,150 L300,140 L400,135 L500,128 L600,122 L700,118 L800,114"
+                stroke="#8a93a3" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
+          <!-- Strategy line -->
+          <path d="M0,180 L60,170 L120,155 L180,148 L240,135 L300,115 L360,98 L420,82 L480,65 L540,52 L600,42 L660,32 L720,22 L780,15"
+                stroke="#7cb7ff" stroke-width="2.5" fill="none"/>
+        </svg>
+      </div>
+      <div class="chart-legend">
+        <span><span class="legend-dot" style="background: #7cb7ff;"></span>Strategy (Sharpe 1.92)</span>
+        <span><span class="legend-dot" style="background: #8a93a3;"></span>Buy &amp; hold SBER</span>
+      </div>
     </div>
-    <div style="margin-top: 6px; font-size: 12px; color: var(--muted);">
-      Cumulative log-return: <span style="color: var(--accent);">strategy</span> vs <span style="color: var(--muted);">buy-and-hold SBER</span>
-    </div>
-  </div>
 
-  <div class="section">
-    <h3>Audit trail (5 events)</h3>
-    <div class="history-row">
-      <div class="ts">2026-07-26 14:23</div>
-      <div class="who">alice</div>
-      <div class="what">created <span class="diff">{fast:5, slow:50}</span> → backtest: Sharpe 1.85 / DSR 0.96 / PBO 0.28</div>
+    <div class="graph-card">
+      <h4>Drawdown</h4>
+      <div class="subtitle">Underwater curve (running max minus current equity)</div>
+      <div class="chart">
+        <svg viewBox="0 0 800 200" preserveAspectRatio="none">
+          <line x1="0" y1="20" x2="800" y2="20" stroke="#2f343c" stroke-width="1" stroke-dasharray="2,4"/>
+          <path d="M0,20 L100,22 L200,30 L300,28 L400,45 L500,40 L600,80 L700,75 L800,82"
+                stroke="#ff6b6b" stroke-width="2" fill="none"/>
+          <text x="610" y="92" fill="#ff6b6b" font-size="11">max -11.4%</text>
+        </svg>
+      </div>
     </div>
-    <div class="history-row">
-      <div class="ts">2026-07-27 09:11</div>
-      <div class="who">bob</div>
-      <div class="what">comment: "стабильно в боковике, проверить на 4ч"</div>
+
+    <div class="graph-card">
+      <h4>Stability · 4-window cross-validation</h4>
+      <div class="subtitle">Каждое окно = 12 месяцев. Пересекающиеся по 6 мес. Проверяет устойчивость Sharpe вне выборки in-sample fit.</div>
+      <div class="stability">
+        <div class="window ok">
+          <span class="period">2022-01 → 2022-12</span>
+          <span>Sharpe 1.62 · DSR 0.91</span>
+          <span class="verdict-ok">✓ pass</span>
+        </div>
+        <div class="window ok">
+          <span class="period">2022-07 → 2023-06</span>
+          <span>Sharpe 1.95 · DSR 0.96</span>
+          <span class="verdict-ok">✓ pass</span>
+        </div>
+        <div class="window ok">
+          <span class="period">2023-01 → 2023-12</span>
+          <span>Sharpe 1.78 · DSR 0.93</span>
+          <span class="verdict-ok">✓ pass</span>
+        </div>
+        <div class="window ok">
+          <span class="period">2023-07 → 2024-06</span>
+          <span>Sharpe 2.05 · DSR 0.98</span>
+          <span class="verdict-ok">✓ pass</span>
+        </div>
+        <div style="margin-top: 8px; color: var(--green); font-size: 13px; text-align: right;">
+          Score: 4/4 stable
+        </div>
+      </div>
     </div>
-    <div class="history-row">
-      <div class="ts">2026-07-28 11:42</div>
-      <div class="who">alice</div>
-      <div class="what">edit: <span class="diff">{fast:5→8, slow:50→55}</span> → re-run: Sharpe 1.92 / DSR 0.94 / PBO 0.32</div>
-    </div>
-    <div class="history-row">
-      <div class="ts">2026-07-30 16:05</div>
-      <div class="who">alice</div>
-      <div class="what">status: screening → approved ✓</div>
-    </div>
-    <div class="history-row">
-      <div class="ts">2026-08-01 09:14</div>
-      <div class="who">alice</div>
-      <div class="what">edit: starting (auto-locked 4:32 ago)</div>
-    </div>
+
   </div>
 
 </div>
