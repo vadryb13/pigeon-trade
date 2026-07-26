@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aqr"
-version = "0.2.0"
-description = "Thin pipeline: natural-language goal -> validated hypotheses on MOEX"
+version = "0.3.0"
+description = "Strict-mode quant pipeline: natural-language goal -> validated hypotheses on MOEX via T-Invest"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Vadim Rybalko" }]
 requires-python = ">=3.11"
-keywords = ["quantitative-finance", "moex", "backtest", "deflated-sharpe", "cpcv"]
+keywords = ["quantitative-finance", "moex", "t-invest", "tinkoff", "backtest", "deflated-sharpe", "cpcv"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Financial and Insurance Industry",

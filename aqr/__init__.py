@@ -1,2 +1,2 @@
-"""AQR — thin pipeline for MOEX quant research: natural-language goal -> validated hypotheses."""
-__version__ = "0.2.0"
+"""AQR — strict-mode quant pipeline: natural-language goal -> validated hypotheses on MOEX via T-Invest."""
+__version__ = "0.3.0"
