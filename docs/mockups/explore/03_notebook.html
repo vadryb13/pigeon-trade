@@ -519,110 +519,38 @@ html, body {
 
     <div class="workspace-pane">
 
-      <!-- ─── Status panel: decision support ─── -->
+      <!-- ─── Compact state card (read-only summary) ─── -->
       <div class="status-panel">
         <div class="status-head">
-          <h3>Workspace · decision support</h3>
-          <div class="live">live · syncing with status-flow</div>
-        </div>
-
-        <div class="status-grid">
-          <div class="k">Status</div>
           <div>
             <span class="tag tag-screening">screening</span>
-            <span style="color: var(--muted); font-size: 12px;">
-              → <span class="tag tag-validating">validating</span> (proposed by run)
+            <span style="margin-left: 10px; color: var(--muted); font-size: 13px;">
+              talking to <strong style="color: var(--accent);">analyst-agent</strong>
+              <span style="font-size: 11px;">— handles /run, cross-val, /approve</span>
             </span>
           </div>
-          <div style="color: var(--muted); font-size: 11px;">
-            auto-transition rule:
-            <code style="background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 3px;">
-              sh&gt;0 &amp;&amp; pbo&lt;0.3
-            </code>
-          </div>
-          <div></div>
-
-          <div class="k">Ticker</div>
-          <div style="grid-column: 2 / 4;">
-            <input type="text" value="SBER" style="max-width: 100px;">
-            <span style="color: var(--muted); font-size: 12px; margin-left: 8px;">
-              FIGI <code style="background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 3px;">BBG004730N88</code>
-              from TInvestAdapter cache
-            </span>
-          </div>
-
-          <div class="k">Family</div>
-          <div>
-            <select style="max-width: 140px;">
-              <option>momentum</option>
-              <option>mean_reversion</option>
-              <option>breakout</option>
-            </select>
-          </div>
-          <div style="grid-column: 4 / 5;"></div>
-
-          <div class="k">Period</div>
-          <div style="grid-column: 2 / 5;">
-            <input class="short" type="date" value="2023-01-03">
-            <span style="color: var(--muted);">→</span>
-            <input class="short" type="date" value="2025-01-03">
-            <span style="color: var(--muted); font-size: 12px; margin-left: 8px;">
-              (editable — changes go to <code style="background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 3px;">edit_history</code>)
-            </span>
-          </div>
-
-          <div class="k">Params</div>
-          <div style="grid-column: 2 / 5;">
-            <span class="pc"><span class="pk">fast</span><span class="pv">8</span></span>
-            <span class="pc"><span class="pk">slow</span><span class="pv">50</span></span>
-            <span class="pc"><span class="pk">signal</span><span class="pv">crossover</span></span>
-            <span class="pc"><span class="pk">tf</span><span class="pv">H1</span></span>
-            <button class="btn" style="padding: 3px 10px; font-size: 12px;">✎ edit</button>
-          </div>
+          <span style="font-size: 12px; color: var(--muted);">
+            updated 4h ago · alice / bob viewing
+          </span>
         </div>
 
-        <div class="status-metrics">
-          <div class="metric-mini">
-            <div class="label">Sharpe</div>
-            <div class="value">2.14</div>
-            <div class="verdict good">strong</div>
-          </div>
-          <div class="metric-mini">
-            <div class="label">DSR</div>
-            <div class="value">0.97</div>
-            <div class="verdict good">≥ 0.95 significant</div>
-          </div>
-          <div class="metric-mini">
-            <div class="label">PBO</div>
-            <div class="value">0.24</div>
-            <div class="verdict good">&lt; 0.30 robust</div>
-          </div>
-          <div class="metric-mini">
-            <div class="label">Stability</div>
-            <div class="value">4/4 ✓</div>
-            <div class="verdict good">cross-val</div>
-          </div>
-        </div>
-
-        <div class="status-actions">
-          <button class="btn">💾 Save &amp; re-run</button>
-          <button class="btn">📁 Archive</button>
-          <button class="btn btn-ai">🤖 AI: validate stability</button>
-          <button class="btn btn-ai">🤖 AI: explain risk</button>
-          <button class="btn btn-ai">🤖 AI: suggest variants</button>
-          <button class="btn btn-success">✓ Approve</button>
-          <button class="btn btn-danger">✗ Reject</button>
+        <div style="
+          display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
+          padding-top: 10px; font-size: 13px; color: var(--muted);
+        ">
+          <span>momentum · <strong style="color: var(--text);">SBER</strong></span>
+          <span>tf <strong style="color: var(--text);">H1</strong></span>
+          <span>2023-01 → <strong style="color: var(--text);">2025-01</strong></span>
+          <span>fast=8 slow=50</span>
+          <span>cross-val <strong style="color: var(--green);">4/4 ✓</strong></span>
+          <span>Sharpe <strong style="color: var(--text);">2.14</strong></span>
         </div>
       </div>
 
-      <!-- ─── Chat thread: where work happens ─── -->
+      <!-- ─── Chat thread: ALL actions live here ─── -->
       <div class="chat-thread">
 
-        <!-- ═══════ message 1: AI PROPOSAL (FIRST bubble) ═══════
-             Принцип: AI инициирует только на старте гипотезы (после batch
-             create). Дальше — user-driven: approve / reject / edit / run
-             через чат. AI не пишет insight-ов сам — только postbacks на
-             user-actions (после /run, /approve). -->
+        <!-- AI PROPOSAL (single initiator) -->
         <div class="bubble bubble-ai">
           <div class="bubble-head">
             <span class="avatar">🤖</span>
@@ -630,72 +558,51 @@ html, body {
             <span class="ts">3 min ago</span>
           </div>
           <div class="body">
-            <strong>Economic hypothesis:</strong> momentum-strategy на голубых
-            фишках через SMA-кроссовер. Быстрая SMA (5) пересекает медленную (50)
-            снизу → long, сверху → flat. Устойчива в направленном рынке нефтегаза
-            и банков; risk — flat-периоды.
+            <strong>Economic hypothesis:</strong> momentum-стратегия на голубых
+            фишках через SMA-кроссовер (5/50, H1). Устойчива в направленном
+            рынке нефтегаза и банков; главный риск — flat-периоды.
             <br><br>
-            <strong>Context:</strong> 📰 8 новостей прочитано · 📊 2 похожих
-            (#3 sh=1.10, #19 sh=0.78) · ⏱ research ≈ 1m 12s
+            <strong>Context:</strong> 📰 8 новостей · 📊 2 похожих (#3 sh=1.10,
+            #19 sh=0.78) · ⏱ research ≈ 1m 12s
             <br><br>
-            <em>3 варианта параметров под эту идею:</em>
+            <em>3 варианта под эту идею:</em>
 
             <div class="variants">
               <div class="variant">
                 <div class="name">A · широкий</div>
                 <div class="params">fast=7 · slow=45</div>
-                <div class="metrics">
-                  <span class="badge">Sharpe 1.89</span>
-                  <span style="color: var(--muted);">PBO 0.31</span>
-                </div>
-                <div class="buttons">
-                  <button class="btn">Run</button>
-                </div>
+                <div class="metrics"><span class="badge">1.89</span><span style="color: var(--muted);">PBO 0.31</span></div>
               </div>
               <div class="variant recommended">
-                <div class="name">B · balanced <span class="badge">recommended</span></div>
+                <div class="name">B · balanced ✓</div>
                 <div class="params">fast=8 · slow=50 · tf=H1</div>
-                <div class="metrics">
-                  <span class="badge">Sharpe 2.14</span>
-                  <span style="color: var(--green);">PBO 0.24</span>
-                </div>
-                <div class="buttons">
-                  <button class="btn btn-success">Run &amp; cross-val</button>
-                </div>
+                <div class="metrics"><span class="badge">2.14</span><span style="color: var(--green);">PBO 0.24</span></div>
               </div>
               <div class="variant">
                 <div class="name">C · консервативный</div>
                 <div class="params">fast=10 · slow=55</div>
-                <div class="metrics">
-                  <span class="badge">Sharpe 1.62</span>
-                  <span style="color: var(--muted);">PBO 0.21</span>
-                </div>
-                <div class="buttons">
-                  <button class="btn">Run</button>
-                </div>
+                <div class="metrics"><span class="badge">1.62</span><span style="color: var(--muted);">PBO 0.21</span></div>
               </div>
             </div>
 
-            <em>/approve · /reject · /edit · /run B · /help</em>
+            /approve · /reject · /edit · /run B · /suggest variants
           </div>
         </div>
 
         <!-- user picks B -->
         <div class="bubble bubble-user">
           <div class="bubble-head">
-            <span class="avatar">a</span>
-            <span class="who">alice</span>
-            <span class="ts">1 min ago</span>
+            <span class="avatar">a</span><span class="who">alice</span><span class="ts">1 min ago</span>
           </div>
-          <div class="body">B. Погнали.</div>
+          <div class="body">B</div>
         </div>
 
         <!-- system event -->
         <div class="bubble bubble-system">
-          ⚙ alice запустил backtest &amp; cross-val для B (H1, 2023-01 → 2025-01)
+          ⚙ alice → /run B · 4-window cross-val · ожидайте ~2m
         </div>
 
-        <!-- ═══════ AI result postback (auto, не proactive) ═══════ -->
+        <!-- analyst-agent postback (handoff visible: editor → analyst) -->
         <div class="bubble bubble-ai">
           <div class="bubble-head">
             <span class="avatar">🤖</span>
@@ -718,35 +625,48 @@ html, body {
             <div class="result-card">
               <div class="title">Cross-val · 4 windows</div>
               <div class="result-row">
-                <span><span class="label">2023-Q1 → 2023-Q4</span> <span class="value">2.31</span></span>
+                <span><span class="label">2023-Q1 → Q4</span> <span class="value">2.31</span></span>
                 <span><span class="label">2023-Q3 → 2024-Q2</span> <span class="value">2.07</span></span>
-                <span><span class="label">2024-Q1 → 2024-Q4</span> <span class="value">2.18</span></span>
+                <span><span class="label">2024-Q1 → Q4</span> <span class="value">2.18</span></span>
                 <span><span class="label">2024-Q3 → 2025-Q1</span> <span class="value">2.05</span></span>
               </div>
             </div>
 
-            Ждём решения.
+            Вердикт: 4/4 stable, PBO 0.24 &lt; 0.30. ✅ можно /approve.
           </div>
         </div>
 
-        <!-- user decision -->
+        <!-- user approves -->
         <div class="bubble bubble-user">
           <div class="bubble-head">
-            <span class="avatar">a</span>
-            <span class="who">alice</span>
-            <span class="ts">только что</span>
+            <span class="avatar">a</span><span class="who">alice</span><span class="ts">только что</span>
           </div>
           <div class="body">/approve</div>
         </div>
 
-        <!-- system postback -->
+        <!-- system postback — handlers pass / narrative saved -->
         <div class="bubble bubble-system">
-          ✓ alice approved · status: validating → approved · narrative в hypothesis_event
+          ✓ alice approved · status: screening → approved · hypothesis_event создан
+        </div>
+
+        <!-- AI handoff: analyst → writer -->
+        <div class="bubble bubble-ai">
+          <div class="bubble-head">
+            <span class="avatar">🤖</span>
+            <span class="who">writer-agent</span>
+            <span class="ts">только что</span>
+          </div>
+          <div class="body">
+            Теперь я. Финальный отчёт в /explore/{id}/report.
+            <br><br>
+            Открой <a href="04_graphs_full.html" style="color: var(--accent);">/graphs/full</a>
+            для визуализации. Что дальше — /edit, /archive, или /run new?
+          </div>
         </div>
 
         <!-- cue: ждём следующего user-action -->
         <div style="text-align: center; color: var(--muted); font-size: 12px; padding: 14px;">
-          ↑ approved · ждём следующего сообщения · /report · /edit · /archive · /run new
+          ↑ approved · /edit · /archive · /run new · /reject (только до approved)
         </div>
 
       </div>
@@ -755,12 +675,10 @@ html, body {
       <div class="composer">
         <div class="composer-wrap">
           <textarea class="composer-input" rows="1"
-                    placeholder="Скажи что-нибудь или /run · /rerun · /edit params · /approve · /reject · /generate report · /help"></textarea>
+                    placeholder="Скажи что-нибудь — current agent ответит. /approve · /reject · /run · /edit · /archive · /help"></textarea>
           <div class="composer-hint">
-            <span><span class="slash">/run</span> backtest</span>
-            <span><span class="slash">/edit</span> params</span>
-            <span><span class="slash">/approve</span> / reject</span>
-            <span><span class="slash">/help</span></span>
+            <span><span class="slash">/approve</span> · <span class="slash">/reject</span> · <span class="slash">/run</span> · <span class="slash">/edit</span></span>
+            <span><span class="slash">/archive</span> · <span class="slash">/help</span></span>
             <span style="margin-left: auto;">
               <kbd style="background: var(--bg); padding: 2px 6px; border-radius: 3px;">⌘+Enter</kbd> · Enter — send
             </span>
@@ -769,6 +687,8 @@ html, body {
       </div>
 
     </div>
+
+  </div>    </div>
 
   </div>
 
