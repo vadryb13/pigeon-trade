@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AQR — Настройки сессии</title>
+<style>
+  :root {
+    --bg: #1a1d23;
+    --panel: #23272f;
+    --text: #e7e9ee;
+    --muted: #8a93a3;
+    --accent: #4dabf7;
+    --danger: #ff6b6b;
+    --border: #353a44;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap {
+    max-width: 540px; margin: 60px auto; padding: 0 20px;
+  }
+  h1 {
+    font-size: 22px; font-weight: 600; margin: 0 0 8px;
+    color: var(--accent);
+  }
+  p.lead {
+    color: var(--muted); margin: 0 0 28px; font-size: 14px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px;
+  }
+  label {
+    display: block; margin-bottom: 6px;
+    font-size: 13px; font-weight: 500; color: var(--muted);
+  }
+  input[type="text"], input[type="password"], select {
+    width: 100%; padding: 10px 12px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: inherit; font-size: 14px;
+    margin-bottom: 16px;
+  }
+  input:focus, select:focus {
+    outline: none; border-color: var(--accent);
+  }
+  .checkbox-row {
+    display: flex; align-items: center; gap: 8px;
+    margin: 4px 0 20px;
+  }
+  .checkbox-row input { margin: 0; }
+  .checkbox-row label { margin: 0; }
+  .btn {
+    display: inline-block; padding: 10px 20px;
+    background: var(--accent); color: #0a1828;
+    border: none; border-radius: 6px; font-weight: 600;
+    cursor: pointer; font-family: inherit; font-size: 14px;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .help {
+    font-size: 12px; color: var(--muted); margin-top: 4px;
+    margin-bottom: 16px;
+  }
+  code {
+    background: var(--bg); padding: 1px 6px; border-radius: 3px;
+    font-size: 13px;
+  }
+  .error {
+    background: rgba(255,107,107,0.1); border: 1px solid var(--danger);
+    color: var(--danger); padding: 10px; border-radius: 6px;
+    margin-bottom: 16px; font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AQR · Настройки сессии</h1>
+  <p class="lead">
+    Введите credentials для текущей сессии. Ключи хранятся в БД
+    зашифрованными (Fernet от <code>AQR_SESSION_SECRET</code>),
+    используются только при обработке ваших сообщений.
+  </p>
+
+  <div class="card">
+    <form method="POST" action="">
+      <label for="llm_model">LLM-модель</label>
+      <select id="llm_model" name="llm_model" required>
+        <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022 (Anthropic)</option>
+        <option value="gpt-4o-mini">gpt-4o-mini (OpenAI)</option>
+        <option value="gigachat/GigaChat-Pro">gigachat/GigaChat-Pro (Сбер)</option>
+      </select>
+      <div class="help">
+        Модель, которая планирует исследование и пишет нарратив.
+      </div>
+
+      <label for="llm_api_key">API-ключ для выбранной модели</label>
+      <input type="password" id="llm_api_key" name="llm_api_key"
+             placeholder="sk-ant-... / sk-... / GigaChat-credentials" required>
+      <div class="help">
+        Anthropic: <code>sk-ant-...</code>, OpenAI: <code>sk-...</code>,
+        GigaChat: <code>GIGACHAT_CREDENTIALS</code>-формат.
+      </div>
+
+      <label for="openai_api_key">OpenAI API-ключ (для эмбеддингов)</label>
+      <input type="password" id="openai_api_key" name="openai_api_key"
+             placeholder="sk-..." required>
+      <div class="help">
+        Отдельный ключ для text-embedding-3-small. Если выбран LLM от OpenAI —
+        можно использовать тот же ключ.
+      </div>
+
+      <label for="invest_token">T-Invest token</label>
+      <input type="password" id="invest_token" name="invest_token"
+             placeholder="t.INVEST_TOKEN..." required>
+      <div class="help">
+        gRPC-токен T-Инвестиций для получения свечей.
+        Получить: <code>tbank.ru/invest</code> → Настройки → Токены.
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="invest_sandbox" name="invest_sandbox" checked>
+        <label for="invest_sandbox">
+          Sandbox target (заявки не уходят на биржу)
+        </label>
+      </div>
+      <div class="help">
+        Снимите для production target. Для реальной торговли.
+      </div>
+
+      <button type="submit" class="btn">Сохранить и продолжить</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>
