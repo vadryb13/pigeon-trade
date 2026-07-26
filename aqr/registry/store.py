@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Hypothesis, Run, Session
+from .models import ChatMessage, Hypothesis, Run, Session
 
 
 class RegistryStore:
@@ -28,11 +28,48 @@ class RegistryStore:
             await self._db.flush()
         return sess
 
-    async def touch_session(self, session_id: str) -> None:
-        sess = await self._db.get(Session, session_id)
-        if sess is not None:
-            sess.last_activity_at = datetime.now(UTC)
-            await self._db.flush()
+    # ── Chat history ─────────────────────────────────────────
+
+    async def save_chat_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        meta: dict | None = None,
+    ) -> ChatMessage:
+        """Сохранить одно сообщение в историю чата сессии.
+
+        Создаёт Session если отсутствует. Возвращает сохранённое сообщение.
+        """
+        await self.get_or_create_session(session_id)
+        msg = ChatMessage(
+            session_id=session_id,
+            role=role,
+            content=content,
+            meta=meta,
+        )
+        self._db.add(msg)
+        await self._db.flush()
+        return msg
+
+    async def list_chat_history(
+        self,
+        session_id: str,
+        limit: int = 200,
+    ) -> list[ChatMessage]:
+        """Последние сообщения сессии, отсортированы по created_at ASC.
+
+        Tiebreaker по id UUID гарантирует детерминированный порядок при
+        одинаковом created_at (что реально при microsecond-точности Postgres).
+        """
+        stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+            .limit(limit)
+        )
+        result = await self._db.execute(stmt)
+        return list(result.scalars().all())
 
     # ── Run ──────────────────────────────────────────────────
 
@@ -42,8 +79,10 @@ class RegistryStore:
         session_id: str,
         status: str = "running",
         summary_metrics: dict | None = None,
+        id: uuid.UUID | None = None,
     ) -> Run:
         run = Run(
+            id=id,
             goal=goal,
             session_id=session_id,
             status=status,
@@ -112,10 +151,6 @@ class RegistryStore:
         await self._db.flush()
         return hyp
 
-    async def create_hypotheses_bulk(self, hypotheses: list[Hypothesis]) -> None:
-        self._db.add_all(hypotheses)
-        await self._db.flush()
-
     async def list_hypotheses_by_run(self, run_id: uuid.UUID) -> list[Hypothesis]:
         stmt = (
             select(Hypothesis)
@@ -125,53 +160,48 @@ class RegistryStore:
         result = await self._db.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_top_valid_hypotheses(
-        self, run_id: uuid.UUID, limit: int = 5
-    ) -> list[Hypothesis]:
+    # ── Semantic search через pgvector ────────────────────────
+
+    async def search_similar(
+        self,
+        embedding: list[float],
+        threshold: float = 0.0,
+        limit: int = 10,
+    ) -> list[tuple[Hypothesis, float]]:
+        """Поиск похожих гипотез по embedding через pgvector cosine distance.
+
+        Returns:
+            список кортежей (Hypothesis, similarity) отсортированный по убыванию
+            similarity. `similarity = 1 - cosine_distance`. Гипотезы без
+            embedding исключаются. Если `threshold > 0` — отсекаются ниже порога.
+        """
+        dist = Hypothesis.embedding.cosine_distance(embedding)
+        sim_expr = (1 - dist).label("similarity")
         stmt = (
-            select(Hypothesis)
-            .where(Hypothesis.run_id == run_id, Hypothesis.is_valid.is_(True))
-            .order_by(Hypothesis.dsr.desc().nullslast())
-            .limit(limit)
+            select(Hypothesis, sim_expr)
+            .where(Hypothesis.embedding.is_not(None))
+            .order_by(dist.asc())
+            .limit(limit * 2)  # берём больше, чтобы отсеять ниже порога
         )
         result = await self._db.execute(stmt)
-        return list(result.scalars().all())
+        rows = list(result.all())
+        if threshold > 0:
+            rows = [(h, s) for h, s in rows if float(s) >= threshold]
+        rows = rows[:limit]
+        return [(h, float(s)) for h, s in rows]
 
-    # ── Batch save from pipeline result ──────────────────────
-
-    async def save_pipeline_result(
+    async def search_by_text(
         self,
-        run_id: uuid.UUID,
-        goal: str,
-        session_id: str,
-        status: str,
-        summary_metrics: dict | None,
-        hypotheses_data: list[dict[str, Any]],
-    ) -> Run:
-        """Атомарно сохраняет Run + все Hypothesis из результата пайплайна."""
-        run = Run(
-            id=run_id,
-            goal=goal,
-            session_id=session_id,
-            status=status,
-            summary_metrics=summary_metrics,
-        )
-        self._db.add(run)
+        text: str,
+        embedder: Any,
+        limit: int = 10,
+    ) -> list[tuple[Hypothesis, float]]:
+        """Текст → embedding → search_similar.
 
-        for h in hypotheses_data:
-            self._db.add(Hypothesis(
-                run_id=run_id,
-                family=h["family"],
-                ticker=h["ticker"],
-                config_json=h.get("config_json", {}),
-                dsr=h.get("dsr"),
-                pbo=h.get("pbo"),
-                cpcv=h.get("cpcv"),
-                sharpe=h.get("sharpe"),
-                max_drawdown=h.get("max_drawdown"),
-                is_valid=h.get("is_valid", False),
-                embedding=h.get("embedding"),
-            ))
-
-        await self._db.flush()
-        return run
+        Args:
+            text: произвольный запрос ("mean reversion на банках")
+            embedder: инстанс `Embedder` (для lazy embedding через OpenAI/hash)
+            limit: максимум результатов
+        """
+        emb = await embedder.embed(text)
+        return await self.search_similar(emb, threshold=0.0, limit=limit)

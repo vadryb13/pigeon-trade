@@ -38,9 +38,40 @@ class Session(Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
 
-    runs: Mapped[list["Run"]] = relationship(
+    runs: Mapped[list[Run]] = relationship(
         back_populates="session", cascade="all, delete-orphan"
     )
+    messages: Mapped[list[ChatMessage]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at",
+    )
+
+
+class ChatMessage(Base):
+    """Одно сообщение в чате сессии (история диалога с агентом)."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    meta: Mapped[dict | None] = mapped_column(
+        "metadata", JSONB, nullable=True
+    )  # node, tool_name, run_id и пр.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+    session: Mapped[Session] = relationship(back_populates="messages")
 
 
 class Run(Base):
@@ -62,7 +93,7 @@ class Run(Base):
     )
 
     session: Mapped[Session] = relationship(back_populates="runs")
-    hypotheses: Mapped[list["Hypothesis"]] = relationship(
+    hypotheses: Mapped[list[Hypothesis]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
     )
 
