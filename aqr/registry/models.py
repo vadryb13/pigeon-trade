@@ -128,3 +128,34 @@ class Hypothesis(Base):
     # ivfflat-индекс добавляется отдельной миграцией после накопления данных
     # (ivfflat нельзя создавать на пустой таблице)
     __ivfflat_deferred__ = True
+
+
+class SessionSettings(Base):
+    """Per-session credentials: LLM model+key, OpenAI key (embeddings), Invest token.
+
+    Хранятся зашифрованными (Fernet от AQR_SESSION_SECRET через HKDF).
+    1:1 с sessions.id, FK CASCADE — при удалении сессии настройки удаляются.
+
+    Заполняется через UI `POST /chat/{token}/settings`, читается при
+    каждом WS-сообщении в `aqr.chat.ws._run_agent_for_session`.
+    """
+
+    __tablename__ = "session_settings"
+
+    session_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    llm_model: Mapped[str] = mapped_column(String(120), nullable=False)
+    llm_api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    openai_api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    invest_token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    invest_sandbox: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )

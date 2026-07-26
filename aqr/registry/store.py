@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import ChatMessage, Hypothesis, Run, Session
+from ..crypto import decrypt_str, encrypt_str
+from .models import ChatMessage, Hypothesis, Run, Session, SessionSettings
 
 
 class RegistryStore:
@@ -205,3 +207,88 @@ class RegistryStore:
         """
         emb = await embedder.embed(text)
         return await self.search_similar(emb, threshold=0.0, limit=limit)
+
+    # ── Session settings (encrypted credentials) ───────────────
+
+    async def save_session_settings(
+        self,
+        session_id: str,
+        llm_model: str,
+        llm_api_key: str,
+        openai_api_key: str,
+        invest_token: str,
+        invest_sandbox: bool = True,
+    ) -> SessionSettings:
+        """Создать или обновить настройки сессии.
+
+        API-ключи шифруются через Fernet (см. `aqr.crypto`) перед записью.
+        """
+        await self.get_or_create_session(session_id)
+
+        existing = await self._db.get(SessionSettings, session_id)
+        if existing is None:
+            settings = SessionSettings(
+                session_id=session_id,
+                llm_model=llm_model,
+                llm_api_key_encrypted=encrypt_str(llm_api_key),
+                openai_api_key_encrypted=encrypt_str(openai_api_key),
+                invest_token_encrypted=encrypt_str(invest_token),
+                invest_sandbox=invest_sandbox,
+                updated_at=datetime.now(UTC),
+            )
+            self._db.add(settings)
+        else:
+            existing.llm_model = llm_model
+            existing.llm_api_key_encrypted = encrypt_str(llm_api_key)
+            existing.openai_api_key_encrypted = encrypt_str(openai_api_key)
+            existing.invest_token_encrypted = encrypt_str(invest_token)
+            existing.invest_sandbox = invest_sandbox
+            existing.updated_at = datetime.now(UTC)
+            settings = existing
+
+        await self._db.flush()
+        return settings
+
+    async def load_session_settings(
+        self, session_id: str
+    ) -> SessionSettings | None:
+        """Загрузить настройки или None если не заданы.
+
+        Ключи НЕ расшифровываются на этом этапе (Fernet-токены остаются в БД).
+        Используйте `decrypt_settings()` для получения plaintext.
+        """
+        return await self._db.get(SessionSettings, session_id)
+
+    async def delete_session_settings(self, session_id: str) -> None:
+        """Удалить настройки сессии (если были)."""
+        existing = await self._db.get(SessionSettings, session_id)
+        if existing is not None:
+            await self._db.delete(existing)
+            await self._db.flush()
+
+
+@dataclass(frozen=True)
+class DecryptedSettings:
+    """Plaintext-credentials, готовые к использованию в runtime.
+
+    Создаётся через `RegistryStore.decrypt_settings()`.
+    """
+
+    session_id: str
+    llm_model: str
+    llm_api_key: str
+    openai_api_key: str
+    invest_token: str
+    invest_sandbox: bool
+
+
+def decrypt_settings(settings: SessionSettings) -> DecryptedSettings:
+    """Расшифровать SessionSettings → plaintext. На ротации secret — RuntimeError."""
+    return DecryptedSettings(
+        session_id=settings.session_id,
+        llm_model=settings.llm_model,
+        llm_api_key=decrypt_str(settings.llm_api_key_encrypted),
+        openai_api_key=decrypt_str(settings.openai_api_key_encrypted),
+        invest_token=decrypt_str(settings.invest_token_encrypted),
+        invest_sandbox=settings.invest_sandbox,
+    )
