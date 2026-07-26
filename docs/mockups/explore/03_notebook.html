@@ -502,9 +502,14 @@ html, body {
 </div>
 
 <div class="tabs">
-  <button class="active" data-tab="notebook">📓 Notebook <span class="badge">live</span></button>
+  <button class="active" data-tab="notebook">💬 Workspace <span class="badge">live</span></button>
   <button data-tab="history">📜 History <span class="badge">7</span></button>
   <button data-tab="graphs">📈 Graphs <span class="badge">3</span></button>
+  <a href="04_graphs_full.html" style="
+    padding: 10px 16px; font-size: 13px; color: var(--accent);
+    text-decoration: none; display: inline-flex; align-items: center;
+    gap: 6px; margin-left: auto;
+  ">📊 Full graphs →</a>
 </div>
 
 <div class="content">
@@ -613,32 +618,31 @@ html, body {
       <!-- ─── Chat thread: where work happens ─── -->
       <div class="chat-thread">
 
-        <!-- user message -->
-        <div class="bubble bubble-user">
-          <div class="bubble-head">
-            <span class="avatar">a</span>
-            <span class="who">alice</span>
-            <span class="ts">2 min ago</span>
-          </div>
-          <div class="body">
-            Уменьшим period до 2 лет и попробуем H1, чтобы cross-val
-            на последних годах был.
-          </div>
-        </div>
-
-        <!-- AI response with embedded variants widget -->
+        <!-- ═══════ message 1: AI PROPOSAL (FIRST bubble) ═══════
+             Принцип: AI инициирует только на старте гипотезы (после batch
+             create). Дальше — user-driven: approve / reject / edit / run
+             через чат. AI не пишет insight-ов сам — только postbacks на
+             user-actions (после /run, /approve). -->
         <div class="bubble bubble-ai">
           <div class="bubble-head">
             <span class="avatar">🤖</span>
             <span class="who">editor-agent</span>
-            <span class="ts">1 min ago</span>
+            <span class="ts">3 min ago</span>
           </div>
           <div class="body">
-            Хорошая мысль. Подобрал 3 варианта параметров под эту цель:
+            <strong>Economic hypothesis:</strong> momentum-strategy на голубых
+            фишках через SMA-кроссовер. Быстрая SMA (5) пересекает медленную (50)
+            снизу → long, сверху → flat. Устойчива в направленном рынке нефтегаза
+            и банков; risk — flat-периоды.
+            <br><br>
+            <strong>Context:</strong> 📰 8 новостей прочитано · 📊 2 похожих
+            (#3 sh=1.10, #19 sh=0.78) · ⏱ research ≈ 1m 12s
+            <br><br>
+            <em>3 варианта параметров под эту идею:</em>
 
             <div class="variants">
               <div class="variant">
-                <div class="name">A · широкий fast</div>
+                <div class="name">A · широкий</div>
                 <div class="params">fast=7 · slow=45</div>
                 <div class="metrics">
                   <span class="badge">Sharpe 1.89</span>
@@ -661,7 +665,7 @@ html, body {
               </div>
               <div class="variant">
                 <div class="name">C · консервативный</div>
-                <div class="params">fast=10 · slow=55 · tf=H1</div>
+                <div class="params">fast=10 · slow=55</div>
                 <div class="metrics">
                   <span class="badge">Sharpe 1.62</span>
                   <span style="color: var(--muted);">PBO 0.21</span>
@@ -672,37 +676,37 @@ html, body {
               </div>
             </div>
 
-            Рекомендую B: max Sharpe на in-sample, стабильно на cross-val.
+            <em>/approve · /reject · /edit · /run B · /help</em>
           </div>
         </div>
 
-        <!-- user selection -->
+        <!-- user picks B -->
         <div class="bubble bubble-user">
           <div class="bubble-head">
             <span class="avatar">a</span>
             <span class="who">alice</span>
-            <span class="ts">сейчас</span>
+            <span class="ts">1 min ago</span>
           </div>
-          <div class="body">B норм, поехали.</div>
+          <div class="body">B. Погнали.</div>
         </div>
 
-        <!-- system run-event -->
+        <!-- system event -->
         <div class="bubble bubble-system">
-          ⚙ alice запустил backtest &amp; cross-val для B
+          ⚙ alice запустил backtest &amp; cross-val для B (H1, 2023-01 → 2025-01)
         </div>
 
-        <!-- AI result postback with metrics widget -->
+        <!-- ═══════ AI result postback (auto, не proactive) ═══════ -->
         <div class="bubble bubble-ai">
           <div class="bubble-head">
             <span class="avatar">🤖</span>
             <span class="who">analyst-agent</span>
-            <span class="ts">через 2m</span>
+            <span class="ts">только что</span>
           </div>
           <div class="body">
-            B backtest завершён:
+            Готово. Метрики B:
 
             <div class="result-card">
-              <div class="title">Variant B · fast=8/slow=50/H1 · period 2023-01 → 2025-01</div>
+              <div class="title">B · fast=8/slow=50/H1 · 2023-01 → 2025-01</div>
               <div class="result-row">
                 <span><span class="label">Sharpe</span> <span class="value">2.14</span></span>
                 <span><span class="label">DSR</span> <span class="value">0.97 ✓</span></span>
@@ -721,32 +725,28 @@ html, body {
               </div>
             </div>
 
-            <strong>Вердикт:</strong> 4/4 stable, PBO 0.24 &lt; 0.30.
-            <span class="tag tag-validating">авто: screening → validating</span>
-
-            Можно утвердить. Что решаем?
+            Ждём решения.
           </div>
         </div>
 
-        <!-- AI suggest next step -->
-        <div class="bubble bubble-ai">
+        <!-- user decision -->
+        <div class="bubble bubble-user">
           <div class="bubble-head">
-            <span class="avatar">🤖</span>
-            <span class="who">writer-agent</span>
+            <span class="avatar">a</span>
+            <span class="who">alice</span>
             <span class="ts">только что</span>
           </div>
-          <div class="body">
-            Подготовил драфт финального отчёта — 8 параграфов, 3 таблицы,
-            equity-кривая в PNG. Положить в «/explore/{id}/report»?
-            <br><br>
-            <em>Если сейчас approve — отчёт сохранится автоматически.</em>
-          </div>
+          <div class="body">/approve</div>
         </div>
 
-        <!-- empty state: cue for user to take action -->
+        <!-- system postback -->
+        <div class="bubble bubble-system">
+          ✓ alice approved · status: validating → approved · narrative в hypothesis_event
+        </div>
+
+        <!-- cue: ждём следующего user-action -->
         <div style="text-align: center; color: var(--muted); font-size: 12px; padding: 14px;">
-          ↑ всё готово к approve. Введите «<code style="background: var(--bg); padding: 2px 6px; border-radius: 3px;">/approve</code>»
-          или используйте кнопки в status panel выше.
+          ↑ approved · ждём следующего сообщения · /report · /edit · /archive · /run new
         </div>
 
       </div>

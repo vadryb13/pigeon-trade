@@ -10,8 +10,9 @@ onboarding новых членов команды.
 |---|---|---|
 | 01 | [`01_explore_empty.html`](01_explore_empty.html) | Empty state — пустой лист после первого деплоя. Number-input для batch count (max 20, default 3). Кнопка «Generate & research in parallel». |
 | 02 | [`02_explore_spreadsheet.html`](02_explore_spreadsheet.html) | Leaderboard из 6 гипотез с разными статусами. Каждая строка кликабельна → открывает `03_notebook.html`. Bulk-select для CSS-overlay compare. Locked-row (`#51`) показывает pessimistic-lock presence. Auto-screening (`#38`) — системное событие, не пользователь. |
-| 03 | [`03_notebook.html`](03_notebook.html) | **Drill-down на одну стратегию.** Combined view с 3 tabs: 💬 Workspace (status panel для decision support: editable params, metrics, stability, quick actions; live chat-thread где работа + adjustments; sticky composer с /run /edit /approve /help) · 📜 History (timeline) · 📈 Graphs (equity/drawdown/stability). Status: `screening` с активным диалогом. Lock-banner сверху при presence-edit. |
-| 04 | [`04_activity.html`](04_activity.html) | Глобальный activity feed за 7 дней. 7 типов событий (created/edit/rerun/approve/reject/comment/AI/status). Авто-status-изменения помечены actor=system. Filter-chips по типу события. |
+| 03 | [`03_notebook.html`](03_notebook.html) | **Drill-down на одну стратегию.** Tabs: 💬 Workspace (status panel для decision support + live chat-thread + sticky composer. AI инициирует только PROPOSAL гипотезы — дальше user-driven: /run, /approve, /reject, /edit; результаты бэктеста и 3-вариантные предложения AI встраиваются в чат как виджеты) · 📜 History · 📈 Graphs (compact). |
+| 04 | [`04_graphs_full.html`](04_graphs_full.html) | **Full graphs page** (отдельная страница, ссылка из Notebook → Graphs tab). TL;DR summary + equity curve (с треугольниками entry/exit) + drawdown + rolling Sharpe + monthly returns heatmap (2 года × 12 месяцев) + 4-window cross-val mini-charts + risk/return scatter по всем гипотезам + distribution daily-returns (с цветовым кодированием sign) + trade analysis (P/L distribution + hold-time). |
+| 05 | [`05_activity.html`](05_activity.html) | Глобальный activity feed за 7 дней. 7 типов событий (created/edit/rerun/approve/reject/comment/AI/status). Авто-status-изменения помечены actor=system. Filter-chips по типу события. |
 
 ## Как открыть
 

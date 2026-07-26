@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>AQR · #42 · Graphs (full)</title>
+<style>
+:root {
+  --bg: #1a1d23;
+  --bg-elev: #242830;
+  --panel: #23272f;
+  --text: #e7e9ee;
+  --muted: #8a93a3;
+  --accent: #7cb7ff;
+  --green: #51cf66;
+  --yellow: #ffd43b;
+  --red: #ff6b6b;
+  --purple: #c084fc;
+  --orange: #ff922b;
+  --border: #2f343c;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { margin: 0; font-size: 16px; font-weight: 600; color: var(--accent); }
+.crumbs { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.crumbs a { color: var(--accent); text-decoration: none; }
+.crumbs span { margin: 0 8px; }
+.crumbs strong { color: var(--text); }
+
+.title-row {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 24px 32px 12px;
+}
+.title-row h2 { margin: 0; font-size: 22px; font-weight: 500; }
+.tag {
+  display: inline-block; padding: 4px 12px; border-radius: 14px;
+  font-size: 12px; font-weight: 500;
+}
+.tag-approved { background: rgba(81, 207, 102, 0.18); color: var(--green); }
+
+.tabs {
+  display: flex; gap: 4px; padding: 0 32px;
+  border-bottom: 1px solid var(--border);
+}
+.tabs a {
+  padding: 10px 16px; font-size: 13px; color: var(--muted);
+  text-decoration: none; border-bottom: 2px solid transparent;
+}
+.tabs a.active { color: var(--text); border-bottom-color: var(--accent); }
+.tabs a:hover { color: var(--text); }
+
+.content { max-width: 1080px; margin: 0 auto; padding: 24px 32px 80px; }
+
+/* ── Graph card ── */
+.graph {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px 22px; margin-bottom: 18px;
+}
+.graph h3 {
+  margin: 0 0 4px; font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.graph h3 .meta { font-size: 12px; color: var(--muted); font-weight: normal; }
+.graph .subtitle { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+.chart {
+  background: linear-gradient(180deg, rgba(124,183,255,0.04), transparent);
+  border: 1px solid var(--border); border-radius: 6px; padding: 12px;
+  width: 100%; box-sizing: border-box;
+}
+.chart svg { width: 100%; height: 100%; display: block; }
+.chart-legend {
+  display: flex; gap: 18px; margin-top: 10px; font-size: 12px; color: var(--muted);
+  flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-line { display: inline-block; width: 12px; height: 2px; }
+
+/* 2-col grid for small charts */
+.row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+}
+.row .chart { height: 200px; }
+.row .chart svg { height: 180px; }
+
+/* 4-col grid for cross-val mini charts */
+.row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.mini-chart {
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px;
+}
+.mini-chart .head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 8px; font-size: 11px; color: var(--muted);
+}
+.mini-chart .head .label { font-weight: 500; color: var(--text); }
+.mini-chart .head .metric { font-variant-numeric: tabular-nums; color: var(--green); font-size: 13px; }
+.mini-chart svg { width: 100%; height: 80px; display: block; }
+
+/* heatmap */
+.heatmap { display: grid; grid-template-columns: 50px repeat(12, 1fr); gap: 2px; font-size: 10px; }
+.heatmap .year { color: var(--muted); padding: 4px; align-self: center; }
+.heatmap .cell { aspect-ratio: 1; border-radius: 2px; }
+
+/* hist */
+.bars { display: flex; align-items: flex-end; gap: 1px; height: 100px; padding: 0 4px; }
+.bars .bar { flex: 1; background: var(--accent); border-radius: 1px; min-height: 2px;
+  position: relative; }
+.bars .bar.zero { background: var(--border); }
+.bars .bar.neg { background: var(--red); }
+.bars .bar.pos { background: var(--green); opacity: 0.8; }
+.bars .bar:hover { opacity: 1; outline: 1px solid var(--text); }
+.axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+/* scatter */
+.scatter { display: grid; grid-template-columns: 80px 1fr; }
+.scatter .y-axis { font-size: 10px; color: var(--muted); }
+.scatter .plot { width: 100%; height: 220px; position: relative; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.scatter .dot {
+  position: absolute; width: 8px; height: 8px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.scatter .dot.our { background: var(--accent); outline: 2px solid var(--accent); width: 12px; height: 12px; }
+.scatter .dot.other { background: var(--muted); opacity: 0.6; }
+
+/* tl-dr summary card */
+.summary {
+  background: linear-gradient(135deg, rgba(124,183,255,0.1), rgba(81,207,102,0.06));
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 20px 24px; margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px;
+}
+.summary .stat .label {
+  font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+}
+.summary .stat .value {
+  font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums;
+}
+.summary .stat .verdict { font-size: 11px; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1><a href="03_notebook.html">AQR</a></h1>
+  <div class="crumbs">
+    <a href="03_notebook.html">/explore</a><span>›</span>
+    <a href="03_notebook.html">#42</a><span>›</span>
+    <strong>Graphs (full)</strong>
+  </div>
+</div>
+
+<div class="title-row">
+  <h2>#42 — SMA5/50 momentum on SBER</h2>
+  <span class="tag tag-approved">approved</span>
+  <span style="color: var(--muted); font-size: 13px;">7 backtests · period 2023-01 → 2025-01 · tf=H1</span>
+</div>
+
+<div class="tabs">
+  <a href="03_notebook.html">💬 Workspace</a>
+  <a href="03_notebook.html" onclick="document.querySelector('[data-pane=history]').click(); return false;">📜 History</a>
+  <a href="03_notebook.html" onclick="document.querySelector('[data-pane=graphs]').click(); return false;">📈 Graphs (compact)</a>
+  <a class="active">📈 Graphs (full)</a>
+</div>
+
+<div class="content">
+
+  <!-- ── TL;DR summary block ── -->
+  <div class="summary">
+    <div class="stat">
+      <div class="label">Sharpe</div>
+      <div class="value">2.14</div>
+      <div class="verdict" style="color: var(--green);">strong</div>
+    </div>
+    <div class="stat">
+      <div class="label">DSR</div>
+      <div class="value">0.97</div>
+      <div class="verdict" style="color: var(--green);">significant</div>
+    </div>
+    <div class="stat">
+      <div class="label">PBO</div>
+      <div class="value">0.24</div>
+      <div class="verdict" style="color: var(--green);">robust</div>
+    </div>
+    <div class="stat">
+      <div class="label">MaxDD</div>
+      <div class="value">-8.9%</div>
+      <div class="verdict" style="color: var(--green);">acceptable</div>
+    </div>
+    <div class="stat">
+      <div class="label">Stability</div>
+      <div class="value">4/4 ✓</div>
+      <div class="verdict" style="color: var(--green);">cross-val</div>
+    </div>
+    <div class="stat">
+      <div class="label">CAGR</div>
+      <div class="value">31.2%</div>
+      <div class="verdict" style="color: var(--muted);">2-year</div>
+    </div>
+  </div>
+
+  <!-- ── Equity curve (main) ── -->
+  <div class="graph">
+    <h3>
+      Equity curve · strategy vs benchmark
+      <span class="meta">1420 H1 bars · 2023-01 → 2025-01</span>
+    </h3>
+    <div class="subtitle">
+      Cumulative log-returns. Синяя линия — наша стратегия, штрихованная — SBER buy &amp; hold.
+      Зелёные треугольники — entry, красные — exit.
+    </div>
+    <div class="chart" style="height: 280px;">
+      <svg viewBox="0 0 1000 250" preserveAspectRatio="none">
+        <!-- Grid -->
+        <line x1="0" y1="125" x2="1000" y2="125" stroke="#2f343c" stroke-width="0.5" stroke-dasharray="2,4"/>
+
+        <!-- Buy & hold -->
+        <path d="M0,180 L100,170 L200,158 L300,150 L400,148 L500,138 L600,128 L700,124 L800,118 L900,114 L1000,108"
+              stroke="#8a93a3" stroke-width="1.5" stroke-dasharray="5,4" fill="none"/>
+
+        <!-- Strategy (best-of-backtests) -->
+        <path d="M0,180 L60,170 L120,158 L180,150 L240,140 L300,124 L360,108 L420,92 L480,76 L540,62 L600,52 L660,42 L720,34 L780,24 L840,18 L900,12 L960,8 L1000,5"
+              stroke="#7cb7ff" stroke-width="2.5" fill="none"/>
+
+        <!-- Fill under strategy (success area) -->
+        <path d="M0,180 L60,170 L120,158 L180,150 L240,140 L300,124 L360,108 L420,92 L480,76 L540,62 L600,52 L660,42 L720,34 L780,24 L840,18 L900,12 L960,8 L1000,5 L1000,250 L0,250 Z"
+              fill="#7cb7ff" fill-opacity="0.06"/>
+
+        <!-- Trade markers (entry/exit) -->
+        <polygon points="60,170 64,176 56,176" fill="#51cf66"/>
+        <polygon points="240,140 244,146 236,146" fill="#51cf66"/>
+        <polygon points="420,92 424,98 416,98" fill="#51cf66"/>
+        <polygon points="180,150 176,144 184,144" fill="#ff6b6b"/>
+        <polygon points="360,108 356,102 364,102" fill="#ff6b6b"/>
+
+        <!-- Sharpe label -->
+        <text x="800" y="40" fill="#7cb7ff" font-size="13" font-weight="600">Sharpe 2.14</text>
+      </svg>
+    </div>
+    <div class="chart-legend">
+      <span class="legend-item"><span class="legend-line" style="background: #7cb7ff;"></span>Strategy (V7)</span>
+      <span class="legend-item"><span class="legend-line" style="background: #8a93a3; border-top: 1px dashed #8a93a3;"></span>SBER buy &amp; hold</span>
+      <span class="legend-item"><span style="display:inline-block; width:8px; height:8px; background:#51cf66; clip-path:polygon(50% 0%, 100% 100%, 0% 100%);"></span>Entry signal</span>
+      <span class="legend-item"><span style="display:inline-block; width:8px; height:8px; background:#ff6b6b; clip-path:polygon(50% 100%, 100% 0%, 0% 0%);"></span>Exit signal</span>
+    </div>
+  </div>
+
+  <!-- ── Drawdown + Rolling Sharpe side-by-side ── -->
+  <div class="row">
+    <div class="graph">
+      <h3>Drawdown (underwater)</h3>
+      <div class="subtitle">Running max − current equity</div>
+      <div class="chart">
+        <svg viewBox="0 0 800 180" preserveAspectRatio="none">
+          <line x1="0" y1="20" x2="800" y2="20" stroke="#2f343c" stroke-width="1"/>
+          <path d="M0,20 L80,22 L160,28 L240,32 L320,40 L400,38 L480,65 L560,58 L640,72 L720,80 L800,75"
+                stroke="#ff6b6b" stroke-width="2" fill="none"/>
+          <!-- max dd marker -->
+          <circle cx="640" cy="72" r="4" fill="#ff6b6b"/>
+          <text x="640" y="92" fill="#ff6b6b" font-size="11" text-anchor="middle">max -8.9% @ 2024-08</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="graph">
+      <h3>Rolling Sharpe (12-month window)</h3>
+      <div class="subtitle">Anchored, sliding</div>
+      <div class="chart">
+        <svg viewBox="0 0 800 180" preserveAspectRatio="none">
+          <line x1="0" y1="90" x2="800" y2="90" stroke="#2f343c" stroke-width="0.5" stroke-dasharray="2,4"/>
+          <line x1="0" y1="30" x2="800" y2="30" stroke="#51cf66" stroke-width="0.5" stroke-dasharray="2,4"/>
+          <line x1="0" y1="150" x2="800" y2="150" stroke="#ff6b6b" stroke-width="0.5" stroke-dasharray="2,4"/>
+          <path d="M0,110 L100,108 L200,100 L300,90 L400,82 L500,78 L600,72 L700,68 L800,62"
+                stroke="#7cb7ff" stroke-width="2" fill="none"/>
+          <text x="780" y="58" fill="#7cb7ff" font-size="11" text-anchor="end">avg 1.86</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Monthly returns heatmap ── -->
+  <div class="graph">
+    <h3>
+      Monthly returns heatmap
+      <span class="meta">2 years · 24 cells</span>
+    </h3>
+    <div class="subtitle">
+      Красный — месяц с убытком, зелёный — с прибылью. Интенсивность =
+      размер возврата.
+    </div>
+    <div style="padding: 0 4px;">
+      <div class="heatmap">
+        <div></div>
+        <div class="year" style="text-align:center;">Jan</div>
+        <div class="year" style="text-align:center;">Feb</div>
+        <div class="year" style="text-align:center;">Mar</div>
+        <div class="year" style="text-align:center;">Apr</div>
+        <div class="year" style="text-align:center;">May</div>
+        <div class="year" style="text-align:center;">Jun</div>
+        <div class="year" style="text-align:center;">Jul</div>
+        <div class="year" style="text-align:center;">Aug</div>
+        <div class="year" style="text-align:center;">Sep</div>
+        <div class="year" style="text-align:center;">Oct</div>
+        <div class="year" style="text-align:center;">Nov</div>
+        <div class="year" style="text-align:center;">Dec</div>
+
+        <div class="year">2023</div>
+        <div class="cell" style="background: rgba(81,207,102,0.5);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.7);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.4);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.6);"></div>
+        <div class="cell" style="background: rgba(255,107,107,0.3);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.5);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.8);"></div>
+        <div class="cell" style="background: rgba(255,107,107,0.4);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.4);"></div>
+        <div class="cell" style="background: rgba(255,107,107,0.5);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.6);"></div>
+
+        <div class="year">2024</div>
+        <div class="cell" style="background: rgba(81,207,102,0.7);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.5);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.6);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.4);"></div>
+        <div class="cell" style="background: rgba(255,107,107,0.6);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.7);"></div>
+        <div class="cell" style="background: rgba(255,107,107,0.5);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.9);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.6);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.5);"></div>
+        <div class="cell" style="background: rgba(81,207,102,0.7);"></div>
+      </div>
+      <div style="margin-top: 8px; display: flex; gap: 16px; font-size: 11px; color: var(--muted);">
+        <span>← 12 bad months / 24 total = 50% drawdown rate</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Cross-val 4 windows ── -->
+  <div class="graph">
+    <h3>
+      Cross-validation · 4 windows
+      <span class="meta">12-month windows · 6-month overlap</span>
+    </h3>
+    <div class="subtitle">
+      Каждое окно — out-of-sample для in-sample fit. Проверяет устойчивость Sharpe вне тренировки.
+    </div>
+    <div class="row-4">
+      <div class="mini-chart">
+        <div class="head"><span class="label">2023-Q1 → Q4</span><span class="metric">2.31</span></div>
+        <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+          <path d="M0,68 L20,62 L40,55 L60,48 L80,42 L100,35 L120,28 L140,22 L160,16 L180,10 L200,6"
+                stroke="#51cf66" stroke-width="2" fill="none"/>
+        </svg>
+        <div style="margin-top: 6px; font-size: 11px; color: var(--muted);">
+          <span style="color: var(--green);">✓ pass</span>
+          · DSR 0.96
+        </div>
+      </div>
+      <div class="mini-chart">
+        <div class="head"><span class="label">2023-Q3 → 2024-Q2</span><span class="metric">2.07</span></div>
+        <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+          <path d="M0,70 L20,65 L40,58 L60,52 L80,48 L100,42 L120,36 L140,30 L160,24 L180,18 L200,14"
+                stroke="#51cf66" stroke-width="2" fill="none"/>
+        </svg>
+        <div style="margin-top: 6px; font-size: 11px; color: var(--muted);">
+          <span style="color: var(--green);">✓ pass</span>
+          · DSR 0.93
+        </div>
+      </div>
+      <div class="mini-chart">
+        <div class="head"><span class="label">2024-Q1 → Q4</span><span class="metric">2.18</span></div>
+        <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+          <path d="M0,68 L20,60 L40,52 L60,46 L80,40 L100,34 L120,28 L140,24 L160,18 L180,14 L200,10"
+                stroke="#51cf66" stroke-width="2" fill="none"/>
+        </svg>
+        <div style="margin-top: 6px; font-size: 11px; color: var(--muted);">
+          <span style="color: var(--green);">✓ pass</span>
+          · DSR 0.96
+        </div>
+      </div>
+      <div class="mini-chart">
+        <div class="head"><span class="label">2024-Q3 → 2025-Q1</span><span class="metric">2.05</span></div>
+        <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+          <path d="M0,72 L20,68 L40,62 L60,58 L80,52 L100,46 L120,40 L140,34 L160,30 L180,24 L200,20"
+                stroke="#51cf66" stroke-width="2" fill="none"/>
+        </svg>
+        <div style="margin-top: 6px; font-size: 11px; color: var(--muted);">
+          <span style="color: var(--green);">✓ pass</span>
+          · DSR 0.91
+        </div>
+      </div>
+    </div>
+    <div style="margin-top: 12px; text-align: right; color: var(--green); font-size: 13px; font-weight: 600;">
+      Score: 4/4 stable · Sharpe σ = 0.13 · DSR mean = 0.93
+    </div>
+  </div>
+
+  <!-- ── Distribution + Scatter ── -->
+  <div class="row">
+    <div class="graph">
+      <h3>Daily returns distribution</h3>
+      <div class="subtitle">
+        Нормальное распределение fitted. Skew = -0.21, kurt = 3.4 (хуже нормального).
+      </div>
+      <div class="chart">
+        <div class="bars">
+          <div class="bar neg" style="height: 8%"></div>
+          <div class="bar neg" style="height: 12%"></div>
+          <div class="bar neg" style="height: 22%"></div>
+          <div class="bar neg" style="height: 38%"></div>
+          <div class="bar neg" style="height: 55%"></div>
+          <div class="bar neg" style="height: 64%"></div>
+          <div class="bar zero" style="height: 70%"></div>
+          <div class="bar pos" style="height: 82%"></div>
+          <div class="bar pos" style="height: 90%"></div>
+          <div class="bar pos" style="height: 88%"></div>
+          <div class="bar pos" style="height: 75%"></div>
+          <div class="bar pos" style="height: 58%"></div>
+          <div class="bar pos" style="height: 38%"></div>
+          <div class="bar pos" style="height: 22%"></div>
+          <div class="bar pos" style="height: 12%"></div>
+          <div class="bar pos" style="height: 5%"></div>
+          <div class="bar pos" style="height: 2%"></div>
+          <div class="bar pos" style="height: 1%"></div>
+        </div>
+        <div class="axis">
+          <span>-6%</span><span>-4%</span><span>-2%</span><span>0</span><span>+2%</span><span>+4%</span><span>+6%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="graph">
+      <h3>Risk / return across hypotheses</h3>
+      <div class="subtitle">
+        Все гипотезы в реестре. Синяя большая точка — наша.
+      </div>
+      <div class="scatter">
+        <div class="y-axis"></div>
+        <div class="plot" style="position: relative; height: 220px;">
+          <div class="dot other" style="left: 30%; bottom: 35%;"></div>
+          <div class="dot other" style="left: 35%; bottom: 50%;"></div>
+          <div class="dot other" style="left: 25%; bottom: 28%;"></div>
+          <div class="dot other" style="left: 45%; bottom: 55%;"></div>
+          <div class="dot other" style="left: 50%; bottom: 42%;"></div>
+          <div class="dot other" style="left: 28%; bottom: 18%;"></div>
+          <div class="dot other" style="left: 38%; bottom: 32%;"></div>
+          <div class="dot other" style="left: 32%; bottom: 48%;"></div>
+          <div class="dot other" style="left: 42%; bottom: 60%;"></div>
+          <div class="dot other" style="left: 22%; bottom: 38%;"></div>
+          <div class="dot other" style="left: 55%; bottom: 65%;"></div>
+          <div class="dot other" style="left: 48%; bottom: 58%;"></div>
+          <div class="dot other" style="left: 40%; bottom: 68%;"></div>
+          <div class="dot our" style="left: 62%; bottom: 78%;"></div>
+          <div class="dot other" style="left: 60%; bottom: 70%;"></div>
+          <div class="dot other" style="left: 58%; bottom: 72%;"></div>
+        </div>
+      </div>
+      <div class="axis">
+        <span style="position: relative; left: -50%;">−15%</span>
+        <span style="position: relative; left: -25%;">−10%</span>
+        <span style="position: relative; left: 0;">−5% MaxDD</span>
+        <span style="position: relative; left: 25%;">0</span>
+        <span style="position: relative; left: 50%;">+5%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Trade-level analysis ── -->
+  <div class="graph">
+    <h3>
+      Trade analysis · 142 trades
+      <span class="meta">avg hold 4.2 days · win-rate 58% · profit-factor 2.1</span>
+    </h3>
+
+    <div class="row">
+      <div class="graph" style="margin-bottom: 0;">
+        <h3 style="font-size: 13px;">P/L distribution per trade</h3>
+        <div class="chart" style="height: 160px;">
+          <div class="bars">
+            <div class="bar neg" style="height: 10%"></div>
+            <div class="bar neg" style="height: 18%"></div>
+            <div class="bar neg" style="height: 32%"></div>
+            <div class="bar neg" style="height: 50%"></div>
+            <div class="bar neg" style="height: 70%"></div>
+            <div class="bar neg" style="height: 88%"></div>
+            <div class="bar neg" style="height: 96%"></div>
+            <div class="bar neg" style="height: 90%"></div>
+            <div class="bar neg" style="height: 75%"></div>
+            <div class="bar zero" style="height: 50%"></div>
+            <div class="bar pos" style="height: 30%"></div>
+            <div class="bar pos" style="height: 50%"></div>
+            <div class="bar pos" style="height: 70%"></div>
+            <div class="bar pos" style="height: 85%"></div>
+            <div class="bar pos" style="height: 92%"></div>
+            <div class="bar pos" style="height: 88%"></div>
+            <div class="bar pos" style="height: 70%"></div>
+            <div class="bar pos" style="height: 50%"></div>
+            <div class="bar pos" style="height: 28%"></div>
+            <div class="bar pos" style="height: 12%"></div>
+          </div>
+          <div class="axis">
+            <span>-10%</span><span>-5%</span><span>0</span><span>+5%</span><span>+10%</span><span>+15%</span><span>+20%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="graph" style="margin-bottom: 0;">
+        <h3 style="font-size: 13px;">Hold time distribution · days</h3>
+        <div class="chart" style="height: 160px;">
+          <div class="bars">
+            <div class="bar pos" style="height: 12%"></div>
+            <div class="bar pos" style="height: 32%"></div>
+            <div class="bar pos" style="height: 58%"></div>
+            <div class="bar pos" style="height: 75%"></div>
+            <div class="bar pos" style="height: 80%"></div>
+            <div class="bar pos" style="height: 72%"></div>
+            <div class="bar pos" style="height: 58%"></div>
+            <div class="bar pos" style="height: 42%"></div>
+            <div class="bar pos" style="height: 32%"></div>
+            <div class="bar pos" style="height: 22%"></div>
+            <div class="bar pos" style="height: 16%"></div>
+            <div class="bar pos" style="height: 12%"></div>
+            <div class="bar pos" style="height: 8%"></div>
+            <div class="bar pos" style="height: 5%"></div>
+            <div class="bar pos" style="height: 3%"></div>
+          </div>
+          <div class="axis">
+            <span>1</span><span>3</span><span>5</span><span>7</span><span>10</span><span>14</span><span>21</span><span>30+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
