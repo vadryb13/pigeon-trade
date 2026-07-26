@@ -320,6 +320,55 @@ export SSL_TBANK_VERIFY=True
 - **Web UI не покрыт browser-тестами.** Vanilla JS — рендеринг и WebSocket-клиент тестируются вручную. CI покрывает только серверные endpoints.
 - **Sandbox vs prod** — `INVEST_SANDBOX=1` по умолчанию. Sandbox имеет ограниченный universe инструментов и тестовые счета; реальные FIGI/свечи только в production-токене.
 
+## Что уже сделано (v0.3)
+
+Работает end-to-end в strict-режиме (без fallback):
+
+- ✅ **T-Invest gRPC**: `aqr/data/tinvest.py` — `TInvestAdapter` с lazy FIGI cache, 7 интервалов (1m/5m/15m/H1/D1/W/M), sandbox по дефолту.
+- ✅ **Validation**: DSR (Bailey-López de Prado), CPCV, PBO в `aqr/validation/`.
+- ✅ **Tool Layer**: 13 инструментов в `aqr.tools.registry` (8 pipeline + 5 storage).
+- ✅ **Agent Layer**: линейный LangGraph-граф в `aqr/agent/graph.py` (plan → load → generate → backtest → validate → narrate → respond).
+- ✅ **Storage**: Postgres + pgvector, `session_settings` с Fernet-encrypted credentials (HKDF от `AQR_SESSION_SECRET`), `chat_messages` для WS-истории.
+- ✅ **Chat**: WS `/chat/{token}` с HMAC auth, per-session credentials через ContextVar (`/chat/{token}/settings` форма), vanilla-JS UI.
+- ✅ **Startup validation**: `aqr/startup.py::validate_runtime()` — auto-provision Postgres-контейнера + обязательные env.
+- ✅ **Tests**: 239 passed, coverage 83% (≥80% gate).
+
+Слабые места v0.3 (обоснование для v0.4):
+- Агент — линейный, без параллелизма и специализации.
+- Скрининг гипотез — медленный (один backtest за раз через executor).
+- Код стратегий — параметризованные шаблоны в `hypotheses.py`, не выразительный Python для сложных сигналов.
+- Execution model — упрощённый (без реалистичного моделирования комиссий/slippage/частичного исполнения).
+
+## План переделывания (v0.4 → v0.5)
+
+| Компонент | Рекомендация | Обоснование |
+|---|---|---|
+| Быстрый скрининг идей | **VectorBT** (open-source, с осознанием что развитие остановлено) | Скорость итераций для проверки «есть ли edge». Numba-ускоренные бэктесты на 1000+ параметров за минуты, а не часы. Подходит для фазы discovery; для production execution — следующий уровень. |
+| Валидация отобранных стратегий | **NautilusTrader** | Реалистичное моделирование исполнения перед paper trading: комиссии, slippage, частичное исполнение, latency, order book. Event-driven backtester на Rust-ядре. Переход от «сигнал даёт Sharpe» → «сигнал даёт Sharpe после реалистичных издержек». |
+| Оркестрация LLM-агентов | **LangGraph с ролями** Researcher/Coder/Reviewer/Writer (расширение существующего `aqr/agent/`) | Полный контроль над данными (T-Invest), параллельный research гипотез через `asyncio.gather`. Заменяет линейный v0.3-граф на иерархию: Editor → {Browser, Analyst} → Reviewer → Writer. |
+| Доступ к брокерским данным | **T-Invest MCP Server + T-Bank Invest API** | Готовая интеграция без написания коннекторов с нуля. MCP-протокол даёт стандартизованный интерфейс для LLM-агентов (tools/JSON-RPC). Не зависит от внутреннего gRPC-SDK. |
+
+### Стратегия миграции
+
+v0.3 продолжает работать параллельно (backward compat). Новые компоненты добавляются в `aqr/v04/`:
+
+```
+aqr/v04/
+  screener/        # VectorBT-обёртки (Phase 1: discovery)
+  executor/        # NautilusTrader-бэктесты (Phase 2: validation)
+  agents/          # 5 ролей через LangGraph (Phase 3: orchestration)
+  mcp/             # T-Invest MCP client (Phase 4: data layer)
+```
+
+WebSocket получает slash-команды `/run` (старый pipeline) и `/team` (новый orchestrator с 5 ролями). Settings-форма расширяется чекбоксом «use team agents» (default off — для backward compat).
+
+### Порядок реализации
+
+1. **VectorBT-screener** — отдельный endpoint `POST /screener/vectorbt`, возвращает топ-N параметров по Sharpe. Без замены существующего flow.
+2. **NautilusTrader-executor** — `aqr/v04/executor/` для paper-trading валидации топ-стратегий из v0.3 pipeline. Опциональный шаг перед реальной торговлей.
+3. **5-agent team** — `aqr/v04/agents/` с LangGraph orchestrator, параллельный research/analysis, доступен через `/team`.
+4. **T-Invest MCP integration** — последним, после стабилизации agent API.
+
 ## Стиль
 
 - `from __future__ import annotations` в каждом модуле.
