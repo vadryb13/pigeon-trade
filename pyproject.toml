@@ -60,6 +60,13 @@ dev = [
     "ruff>=0.5",
     "python-multipart",
 ]
+# v0.4 опциональные компоненты (устанавливаются по необходимости)
+v04_screener = [
+    "vectorbt>=1.1",
+]
+v04_executor = [
+    "nautilus_trader>=1.220",
+]
 
 [project.urls]
 Repository = "https://github.com/vadryb13/aqr"
