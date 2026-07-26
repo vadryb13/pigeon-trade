@@ -1,27 +1,15 @@
 """
 ChatPlanner — принимает свободный запрос пользователя и выдаёт исполнимый ResearchPlan.
 
-Работает в двух режимах:
-1. LLM-mode: если задан AQR_LLM_MODEL и есть ключ, использует litellm с JSON-schema
-2. Fallback-mode: детерминистский парсер по ключевым словам
-
-Fallback покрывает базовые сценарии, чтобы система работала без ключей.
+Строгий режим: всегда зовёт LLM. Credentials берутся из `current_credentials()`
+(per-session ContextVar). Без credentials — RuntimeError.
 """
 from __future__ import annotations
 
 import json
 import os
-import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
-
-# Известные тикеры MOEX (базовое покрытие, для fallback-парсера)
-MOEX_TICKERS = {
-    "SBER", "GAZP", "LKOH", "GMKN", "ROSN", "TATN", "MTSS", "MGNT",
-    "VTBR", "NVTK", "SNGS", "SBERP", "PLZL", "ALRS", "CHMF", "NLMK",
-    "MOEX", "YNDX", "OZON", "TCSG", "AFLT", "AFKS", "PHOR", "MAGN",
-    "IRAO", "HYDR", "FEES", "RUAL", "MTLR", "POLY", "BSPB", "SIBN",
-}
 
 
 @dataclass
@@ -62,34 +50,46 @@ PLANNER_SYSTEM = """Ты руководитель quant-исследовател
 
 
 class ChatPlanner:
-    """Планировщик, превращающий свободный запрос в ResearchPlan."""
+    """Планировщик: свободный запрос → ResearchPlan через LLM.
+
+    Credentials читаются из per-session ContextVar
+    (см. `aqr.agent.context.current_credentials`). Без активной сессии
+    с credentials — RuntimeError.
+    """
 
     def __init__(self, model: str | None = None):
         self.model = model or os.environ.get("AQR_LLM_MODEL")
 
     def plan(self, user_goal: str) -> ResearchPlan:
-        if self.model and self._has_llm_key():
-            try:
-                return self._llm_plan(user_goal)
-            except Exception:
-                # LLM упал — тихо переходим на fallback
-                pass
-        return self._fallback_plan(user_goal)
-
-    def _has_llm_key(self) -> bool:
-        keys = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIGACHAT_CREDENTIALS")
-        return any(os.environ.get(k) for k in keys)
+        return self._llm_plan(user_goal)
 
     def _llm_plan(self, user_goal: str) -> ResearchPlan:
-        import litellm  # noqa: F401 — import только когда реально используем
-        resp = litellm.completion(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": PLANNER_SYSTEM},
-                {"role": "user", "content": user_goal},
-            ],
-            response_format={"type": "json_object"},
-        )
+        """Зовёт LLM с credentials активной сессии. Raise на любой ошибке."""
+        from ..agent.context import current_credentials
+
+        creds = current_credentials()
+        if creds is None:
+            raise RuntimeError(
+                "ChatPlanner.plan: session credentials not configured. "
+                "Open /chat/{token}/settings and enter credentials."
+            )
+
+        # litellm подхватывает ANTHROPIC_API_KEY / OPENAI_API_KEY /
+        # GIGACHAT_CREDENTIALS из env. Прокидываем per-session через
+        # временный override env только на время вызова.
+        from ..llm_env import llm_credentials_env
+
+        with llm_credentials_env(creds):
+            import litellm
+
+            resp = litellm.completion(
+                model=creds.llm_model,
+                messages=[
+                    {"role": "system", "content": PLANNER_SYSTEM},
+                    {"role": "user", "content": user_goal},
+                ],
+                response_format={"type": "json_object"},
+            )
         data = json.loads(resp.choices[0].message.content)
         return self._plan_from_dict(user_goal, data)
 
@@ -105,88 +105,3 @@ class ChatPlanner:
             n_hypotheses=int(data.get("n_hypotheses", 20)),
             rationale=data.get("rationale", ""),
         )
-
-    # ---------- FALLBACK ----------
-
-    def _fallback_plan(self, goal: str) -> ResearchPlan:
-        """Детерминистский парсер: ключевые слова → план."""
-        g = goal.lower()
-
-        tickers = self._extract_tickers(g)
-        if not tickers:
-            tickers = ["SBER", "GAZP", "LKOH"]
-
-        families = []
-        if any(w in g for w in ("моментум", "momentum", "тренд", "импульс")):
-            families.append("momentum")
-        if any(w in g for w in ("возврат", "mean", "reversion", "откат", "разворот")):
-            families.append("mean_reversion")
-        if any(w in g for w in ("пробой", "breakout", "уровен")):
-            families.append("breakout")
-        if any(w in g for w in ("волатил", "vol", "спред")):
-            families.append("volatility")
-        if not families:
-            families = ["momentum", "mean_reversion"]
-
-        if any(w in g for w in ("час", "часов", "h1", "hourly", "интрадей", "внутриднев")):
-            timeframe = "H1"
-        else:
-            timeframe = "D1"
-
-        # оценка глубины исследования
-        n = 20
-        if any(w in g for w in ("быстро", "коротко", "минимум")):
-            n = 10
-        if any(w in g for w in ("глубоко", "тщательно", "много")):
-            n = 40
-
-        rationale = (
-            f"Fallback-план (LLM не подключён). Извлёк тикеры {tickers}, "
-            f"семейства гипотез {families}, таймфрейм {timeframe}, "
-            f"количество гипотез {n}."
-        )
-
-        return ResearchPlan(
-            goal=goal,
-            tickers=tickers,
-            timeframe=timeframe,
-            hypothesis_families=families,
-            n_hypotheses=n,
-            rationale=rationale,
-        )
-
-    def _extract_tickers(self, g: str) -> list[str]:
-        found = []
-        # Прямое упоминание тикера в верхнем регистре
-        for m in re.findall(r"\b[A-Z]{4,5}\b", g.upper()):
-            if m in MOEX_TICKERS and m not in found:
-                found.append(m)
-        # Русские названия компаний
-        aliases = {
-            "сбер": "SBER", "сбербанк": "SBER",
-            "газпром": "GAZP", "лукойл": "LKOH", "норникел": "GMKN",
-            "роснефт": "ROSN", "татнефт": "TATN", "мтс": "MTSS",
-            "магнит": "MGNT", "втб": "VTBR", "новатэк": "NVTK",
-            "яндекс": "YNDX", "озон": "OZON", "тинькоф": "TCSG",
-            "аэрофлот": "AFLT", "полюс": "PLZL", "алроса": "ALRS",
-            "северсталь": "CHMF", "нлмк": "NLMK", "мосбирж": "MOEX",
-        }
-        for ru, tk in aliases.items():
-            if ru in g and tk not in found:
-                found.append(tk)
-
-        # Категории
-        if "голубые фишки" in g or "blue chip" in g:
-            for t in ("SBER", "GAZP", "LKOH", "GMKN", "ROSN", "TATN"):
-                if t not in found:
-                    found.append(t)
-        if "металлург" in g:
-            for t in ("CHMF", "NLMK", "MAGN", "PLZL", "GMKN"):
-                if t not in found:
-                    found.append(t)
-        if "банк" in g:
-            for t in ("SBER", "VTBR", "TCSG", "BSPB"):
-                if t not in found:
-                    found.append(t)
-
-        return found[:8]  # не больше 8 тикеров

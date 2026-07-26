@@ -1,14 +1,56 @@
-"""Tests for InsightReviewer — LLM-обзор поверх детерминистичных инсайтов."""
+"""Tests for InsightReviewer — LLM-обзор поверх детерминистичных инсайтов.
+
+Строгий режим: всегда зовёт LLM с per-session credentials.
+Без credentials или пустом top → raise.
+"""
 from __future__ import annotations
 
 import sys
 import types
 from unittest.mock import MagicMock
 
+import pytest
+
 from aqr.pipeline import InsightReviewer
 from aqr.pipeline.executor import BacktestResult, PipelineResult
 from aqr.pipeline.hypotheses import HypothesisSpec
 from aqr.pipeline.planner import ResearchPlan
+
+
+@pytest.fixture(autouse=True)
+def _stable_secret(monkeypatch):
+    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
+
+
+@pytest.fixture
+def with_credentials():
+    """Устанавливает credentials в ContextVar, очищает на teardown."""
+    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.registry import DecryptedSettings
+
+    creds = DecryptedSettings(
+        session_id="alice",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_api_key="sk-ant-fake",
+        openai_api_key="sk-oai-fake",
+        invest_token="t.INVEST_TOKEN_fake",
+        invest_sandbox=True,
+    )
+    token = set_credentials(creds)
+    yield creds
+    reset_credentials(token)
+
+
+def _fake_credentials():
+    from aqr.registry import DecryptedSettings
+    return DecryptedSettings(
+        session_id="alice",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_api_key="sk-ant-fake",
+        openai_api_key="sk-oai-fake",
+        invest_token="t.INVEST_TOKEN_fake",
+        invest_sandbox=True,
+    )
 
 
 def _fake_result() -> PipelineResult:
@@ -54,11 +96,7 @@ def _fake_result() -> PipelineResult:
 
 
 def _install_fake_litellm(monkeypatch, response_content: str) -> MagicMock:
-    """Ставит в sys.modules фейковый litellm с litellm.completion.
-
-    Работает и когда настоящий litellm не установлен (базовое окружение),
-    и когда установлен (мок замещает completion).
-    """
+    """Ставит в sys.modules фейковый litellm с litellm.completion."""
     fake_resp = MagicMock()
     fake_resp.choices = [MagicMock()]
     fake_resp.choices[0].message.content = response_content
@@ -69,45 +107,33 @@ def _install_fake_litellm(monkeypatch, response_content: str) -> MagicMock:
     return fake_module.completion
 
 
-def test_reviewer_returns_empty_without_key(monkeypatch):
-    """Без ключа reviewer тихо возвращает [] — pipeline не ломается."""
-    for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIGACHAT_CREDENTIALS"):
-        monkeypatch.delenv(k, raising=False)
-    monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
+def test_reviewer_raises_without_credentials(monkeypatch):
+    """Без active credentials в ContextVar → RuntimeError."""
+    from aqr.agent.context import current_credentials
+
+    assert current_credentials() is None
 
     reviewer = InsightReviewer()
-    result = reviewer.review(_fake_result(), ["Тестовый инсайт"])
-    assert result == []
+    with pytest.raises(RuntimeError, match="credentials not configured"):
+        reviewer.review(_fake_result(), ["test"])
 
 
-def test_reviewer_returns_empty_without_model(monkeypatch):
-    """Без модели reviewer возвращает []."""
-    monkeypatch.delenv("AQR_LLM_MODEL", raising=False)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-
-    reviewer = InsightReviewer()
-    result = reviewer.review(_fake_result(), ["Тестовый инсайт"])
-    assert result == []
-
-
-def test_reviewer_returns_empty_when_no_top(monkeypatch):
-    """При пустом top LLM не вызывается — экономим токены."""
+def test_reviewer_raises_when_top_is_empty(monkeypatch, with_credentials):
+    """Пустой result.top → ValueError (экономим токены до LLM-вызова)."""
     monkeypatch.setenv("AQR_LLM_MODEL", "test-model")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    mock_completion = _install_fake_litellm(monkeypatch, '{"observations": ["nope"]}')
+    mock_completion = _install_fake_litellm(monkeypatch, '{"observations": []}')
 
     r = _fake_result()
     r.top = []
     reviewer = InsightReviewer()
-    result = reviewer.review(r, [])
-    assert result == []
+    with pytest.raises(ValueError, match="result.top is empty"):
+        reviewer.review(r, [])
     mock_completion.assert_not_called()
 
 
-def test_reviewer_parses_llm_response(monkeypatch):
-    """С мок-LLM возвращает observations."""
+def test_reviewer_parses_llm_response(monkeypatch, with_credentials):
+    """С credentials и мок-LLM возвращает observations."""
     monkeypatch.setenv("AQR_LLM_MODEL", "test-model")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     mock_completion = _install_fake_litellm(
         monkeypatch,
         '{"observations": ['
@@ -123,17 +149,15 @@ def test_reviewer_parses_llm_response(monkeypatch):
     assert "SBER" in result[0]
     mock_completion.assert_called_once()
 
-    # Убедимся, что payload содержит нужные поля
     call = mock_completion.call_args
     user_msg = call.kwargs["messages"][1]["content"]
     assert "SBER" in user_msg
     assert "deterministic_insights" in user_msg
 
 
-def test_reviewer_caps_at_3(monkeypatch):
+def test_reviewer_caps_at_3(monkeypatch, with_credentials):
     """Если LLM вернул 5+ наблюдений — берём максимум 3."""
     monkeypatch.setenv("AQR_LLM_MODEL", "test-model")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     _install_fake_litellm(
         monkeypatch,
         '{"observations": ["a", "b", "c", "d", "e"]}',
@@ -144,21 +168,19 @@ def test_reviewer_caps_at_3(monkeypatch):
     assert len(result) == 3
 
 
-def test_reviewer_survives_bad_llm_response(monkeypatch):
-    """Кривой JSON от LLM → пустой список, не exception."""
+def test_reviewer_propagates_bad_json(monkeypatch, with_credentials):
+    """Кривой JSON от LLM → ValueError (теперь не глотается)."""
     monkeypatch.setenv("AQR_LLM_MODEL", "test-model")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     _install_fake_litellm(monkeypatch, "не JSON, а текст")
 
     reviewer = InsightReviewer()
-    result = reviewer.review(_fake_result(), [])
-    assert result == []
+    with pytest.raises(ValueError, match="Expecting value"):
+        reviewer.review(_fake_result(), [])
 
 
-def test_reviewer_trims_long_observations(monkeypatch):
+def test_reviewer_trims_long_observations(monkeypatch, with_credentials):
     """Слишком длинное наблюдение обрезается до 400 символов."""
     monkeypatch.setenv("AQR_LLM_MODEL", "test-model")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     huge = "x" * 1000
     _install_fake_litellm(
         monkeypatch,
