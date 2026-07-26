@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -25,13 +25,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          # Все extras — иначе storage/embedding/cache тесты молча отключаются (TESTS-4)
+          pip install -e ".[dev,llm,data,embeddings]"
+          pip install pytest-cov
 
       - name: Lint with ruff
+        # Без `|| true` — ошибки линтера падают CI (TESTS-3)
         run: |
-          ruff check aqr/ tests/ || true
+          ruff check aqr/ tests/
 
-      - name: Run tests
+      - name: Run tests with coverage gating
+        # Coverage >= 80% (TESTS-2)
         run: |
-          PYTHONPATH=. pytest tests/ -v --tb=short
-
+          PYTHONPATH=. pytest tests/ -v --tb=short --cov=aqr --cov-report=term-missing --cov-fail-under=80
