@@ -3,20 +3,49 @@
 Подмешивается в системный промпт LLM-роутера и narrate-узла, чтобы агент
 помнил историю сессии и предлагал непроверенные комбинации.
 
-Устойчив к отсутствию БД: все методы возвращают пустые/дефолтные значения,
-если Postgres недоступен — это позволяет запускать агент в тестах и CLI.
+Также: per-session credentials через ContextVar (`current_credentials`).
+Устанавливается в `aqr.chat.ws._run_agent_for_session` на время одного
+прогонов графа. Читается `current_credentials()` из planner/narrator/
+reviewer/embedder/tinvest — без credentials LLM/Invest не работают.
 """
 
 from __future__ import annotations
 
 import logging
+from contextvars import ContextVar
 
 logger = logging.getLogger(__name__)
 
 from typing import Any
 
 from ..db import _async_session_factory
-from ..registry import RegistryStore
+from ..registry import DecryptedSettings, RegistryStore
+
+# ── Per-session credentials ─────────────────────────────────────
+
+_active_credentials: ContextVar[DecryptedSettings | None] = ContextVar(
+    "aqr_active_credentials", default=None
+)
+
+
+def set_credentials(settings: DecryptedSettings | None) -> Any:
+    """Установить credentials в текущий контекст. Возвращает token для reset."""
+    return _active_credentials.set(settings)
+
+
+def reset_credentials(token: Any) -> None:
+    """Восстановить предыдущее значение credentials."""
+    _active_credentials.reset(token)
+
+
+def current_credentials() -> DecryptedSettings | None:
+    """Credentials текущей сессии или None если не установлены.
+
+    Инструменты (plan_research, load_prices, narrate, Embedder и т.д.)
+    читают credentials через эту функцию. Если None — runtime-ошибка
+    «settings not configured» (см. AGENTS.md инвариант 2).
+    """
+    return _active_credentials.get()
 
 
 class SessionContext:

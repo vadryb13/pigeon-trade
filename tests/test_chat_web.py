@@ -1,20 +1,57 @@
 """Тесты для aqr/chat/web.py — Web UI endpoints."""
 from __future__ import annotations
 
-import os
-
 import pytest
 
 
 @pytest.fixture(autouse=True)
 def _stable_secret(monkeypatch):
-    """Зафиксировать AQR_SESSION_SECRET для воспроизводимости токенов.
+    """Зафиксировать AQR_SESSION_SECRET для воспроизводимости токенов."""
+    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
 
-    Также сбрасываем AQR_REQUIRE_WS_AUTH — test_chat_ws.py ставит его в 0
-    на module level, что ломает auth-on тесты в этом файле.
-    """
-    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-32-bytes-base64==")
-    monkeypatch.delenv("AQR_REQUIRE_WS_AUTH", raising=False)  # → default = "1"
+
+@pytest.fixture(autouse=True)
+def _mock_db(monkeypatch):
+    """Мок БД для WS integration-теста ниже."""
+    from aqr import db as db_mod
+    from aqr.chat import ws as ws_mod
+
+    class _S:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            return None
+        async def commit(self):
+            pass
+        async def flush(self):
+            pass
+        async def get(self, *args, **kw):
+            return None
+
+    class _F:
+        def __call__(self):
+            return _S()
+
+    monkeypatch.setattr(db_mod, "_async_session_factory", _F())
+    monkeypatch.setattr(ws_mod, "_async_session_factory", _F())
+
+    # Мок _load_credentials чтобы WS-handshake не падал
+    from aqr.chat import ws as ws_mod
+    from aqr.registry import DecryptedSettings
+
+    fake_creds = DecryptedSettings(
+        session_id="integration-test",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_api_key="k",
+        openai_api_key="k",
+        invest_token="t",
+        invest_sandbox=True,
+    )
+
+    async def fake_load_credentials(session_id):
+        return fake_creds
+
+    monkeypatch.setattr(ws_mod, "_load_credentials", fake_load_credentials)
 
 
 class TestChatPage:
@@ -104,20 +141,6 @@ class TestChatNew:
         assert data["session_id"] == "alice"
         assert data["token"] is not None
         assert verify_token(data["token"]) == "alice"
-
-    def test_returns_null_token_when_auth_disabled(self, monkeypatch):
-        """Без auth — token=null (legacy режим)."""
-        monkeypatch.setenv("AQR_REQUIRE_WS_AUTH", "0")
-        from fastapi.testclient import TestClient
-
-        from aqr.main import app
-
-        client = TestClient(app)
-        r = client.get("/chat/new", params={"session_id": "dev"})
-        assert r.status_code == 200
-        data = r.json()
-        assert data["session_id"] == "dev"
-        assert data["token"] is None
 
     def test_empty_session_id_rejected(self):
         """Пустой session_id → 422 (валидация Query)."""

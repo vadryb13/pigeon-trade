@@ -1,21 +1,22 @@
-"""Тесты WebSocket-чата через FastAPI TestClient."""
+"""Тесты WebSocket-чата через FastAPI TestClient (HMAC auth обязателен)."""
 from __future__ import annotations
 
 import json
 
-# SEC-1: для тестов отключаем обязательную проверку токена.
-# В реальном prod auth включён через AQR_REQUIRE_WS_AUTH=1 (дефолт).
-# Тесты, которым нужен реальный auth flow, используют sign_session() ниже.
-import os
-
 import pytest
 
-os.environ["AQR_REQUIRE_WS_AUTH"] = "0"
+
+@pytest.fixture(autouse=True)
+def _stable_secret(monkeypatch):
+    """Зафиксировать AQR_SESSION_SECRET ≥32 chars для воспроизводимости токенов."""
+    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
+
 
 # ── Mocks для БД ────────────────────────────────────────────────
 
 class _FakeSession:
     """Заглушка AsyncSession — поддерживает async context manager."""
+
     async def __aenter__(self):
         return self
 
@@ -65,11 +66,44 @@ def mock_db(monkeypatch):
     return factory
 
 
+@pytest.fixture
+def mock_credentials(monkeypatch):
+    """Мок _load_credentials → возвращает фейковые credentials сессии."""
+    from aqr.chat import ws as ws_mod
+    from aqr.registry import DecryptedSettings
+
+    fake_creds = DecryptedSettings(
+        session_id="alice",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_api_key="sk-ant-fake",
+        openai_api_key="sk-oai-fake",
+        invest_token="t.INVEST_TOKEN_fake",
+        invest_sandbox=True,
+    )
+
+    async def fake_load_credentials(session_id: str):
+        return fake_creds
+
+    monkeypatch.setattr(ws_mod, "_load_credentials", fake_load_credentials)
+    return fake_creds
+
+
+@pytest.fixture
+def mock_no_credentials(monkeypatch):
+    """Мок _load_credentials → возвращает None (settings не настроены)."""
+    from aqr.chat import ws as ws_mod
+
+    async def fake_load_credentials(session_id: str):
+        return None
+
+    monkeypatch.setattr(ws_mod, "_load_credentials", fake_load_credentials)
+
+
 # ── Mocks для агента ─────────────────────────────────────────────
 
 @pytest.fixture
 def mock_agent(monkeypatch):
-    """Мок графа — astream возвращает финальное состояние, run_agent не вызывается."""
+    """Мок графа — astream возвращает финальное состояние."""
     fake_state = {
         "step": "plan",
         "plan": {"tickers": ["SBER"], "hypothesis_families": ["momentum"]},
@@ -94,7 +128,6 @@ def mock_agent(monkeypatch):
     def fake_get_agent():
         return _FakeAgent()
 
-    # Патчим на обоих уровнях: и в aqr.agent.graph, и в aqr.chat.ws
     monkeypatch.setattr("aqr.agent.graph.get_agent", fake_get_agent)
     monkeypatch.setattr("aqr.chat.ws.get_agent", fake_get_agent)
     return _FakeAgent
@@ -102,68 +135,94 @@ def mock_agent(monkeypatch):
 
 # ── WS тесты ─────────────────────────────────────────────────────
 
+def _sign(session_id: str) -> str:
+    from aqr.auth import sign_session
+    return sign_session(session_id)
+
+
 class TestChatWS:
-    def test_ws_connect_receives_connected_history(self, mock_db, mock_agent):
-        """При connect клиент получает 'connected' и (опц.) 'history'."""
+    def test_ws_connect_receives_connected(
+        self, mock_db, mock_credentials, mock_agent
+    ):
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
-        with client.websocket_connect("/chat/test-session-1") as ws:
+        token = _sign("test-session-1")
+        with client.websocket_connect(f"/chat/{token}") as ws:
             msg1 = ws.receive_json()
             assert msg1["type"] == "connected"
             assert msg1["session_id"] == "test-session-1"
+            assert msg1["credentials_configured"] is True
 
-    def test_ws_ping_returns_pong(self, mock_db, mock_agent):
-        """keepalive: ping → pong."""
+    def test_ws_invalid_token_closed(
+        self, mock_db, mock_credentials, mock_agent
+    ):
+        """Без валидного HMAC-токена WS закрывается (1008)."""
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
-        with client.websocket_connect("/chat/test-ping") as ws:
+        with pytest.raises(Exception), client.websocket_connect("/chat/raw-no-hmac") as ws:
+            ws.receive_json()
+
+    def test_ws_ping_returns_pong(self, mock_db, mock_credentials, mock_agent):
+        from fastapi.testclient import TestClient
+
+        from aqr.main import app
+
+        client = TestClient(app)
+        token = _sign("test-ping")
+        with client.websocket_connect(f"/chat/{token}") as ws:
             ws.receive_json()  # connected
             ws.send_text(json.dumps({"type": "ping"}))
             resp = ws.receive_json()
             assert resp["type"] == "pong"
 
-    def test_ws_unknown_type_returns_error(self, mock_db, mock_agent):
-        """Неизвестный type → error-сообщение (без падения)."""
+    def test_ws_unknown_type_returns_error(
+        self, mock_db, mock_credentials, mock_agent
+    ):
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
-        with client.websocket_connect("/chat/test-unknown") as ws:
+        token = _sign("test-unknown")
+        with client.websocket_connect(f"/chat/{token}") as ws:
             ws.receive_json()  # connected
             ws.send_text(json.dumps({"type": "spam"}))
             resp = ws.receive_json()
             assert resp["type"] == "error"
             assert "spam" in resp["message"]
 
-    def test_ws_invalid_json_returns_error(self, mock_db, mock_agent):
-        """Битый JSON → error-сообщение."""
+    def test_ws_invalid_json_returns_error(
+        self, mock_db, mock_credentials, mock_agent
+    ):
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
-        with client.websocket_connect("/chat/test-invalid") as ws:
+        token = _sign("test-invalid")
+        with client.websocket_connect(f"/chat/{token}") as ws:
             ws.receive_json()  # connected
             ws.send_text("{not json")
             resp = ws.receive_json()
             assert resp["type"] == "error"
             assert "Invalid JSON" in resp["message"]
 
-    def test_ws_message_triggers_agent_and_done(self, mock_db, mock_agent):
-        """user-message → agent → progress → user_echo → done."""
+    def test_ws_message_triggers_agent_and_done(
+        self, mock_db, mock_credentials, mock_agent
+    ):
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
-        with client.websocket_connect("/chat/test-msg") as ws:
+        token = _sign("test-msg")
+        with client.websocket_connect(f"/chat/{token}") as ws:
             ws.receive_json()  # connected
 
             ws.send_text(json.dumps({
@@ -172,47 +231,68 @@ class TestChatWS:
             }))
 
             kinds = []
+            final_msg = None
             while True:
                 msg = ws.receive_json()
                 kinds.append(msg["type"])
-                if msg["type"] in ("done", "error"):
+                if msg["type"] == "done":
+                    final_msg = msg
+                    break
+                if msg["type"] == "error":
                     break
 
-            # Должны получить: user_echo, progress, ..., done
             assert "user_echo" in kinds
             assert "done" in kinds
-            # Финальное сообщение содержит нарратив
-            done = next(m for m in [msg] if m["type"] == "done")
-            assert "narrative" in done
-            assert "Тестовый отчёт" in done["narrative"]
+            assert final_msg is not None
+            assert "narrative" in final_msg
+            assert "Тестовый отчёт" in final_msg["narrative"]
 
-    def test_ws_message_empty_content_ignored(self, mock_db, mock_agent):
-        """Пустой content → no-op (агент не запускается)."""
+    def test_ws_message_without_credentials_returns_error(
+        self, mock_db, mock_no_credentials, mock_agent
+    ):
+        """Без настроенных credentials → message → error с ссылкой на /settings."""
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
-        with client.websocket_connect("/chat/test-empty") as ws:
+        token = _sign("no-settings-session")
+        with client.websocket_connect(f"/chat/{token}") as ws:
+            connected = ws.receive_json()
+            assert connected["credentials_configured"] is False
+
+            settings_error = ws.receive_json()
+            assert settings_error["type"] == "error"
+            assert "/settings" in settings_error["message"]
+
+    def test_ws_message_empty_content_ignored(
+        self, mock_db, mock_credentials, mock_agent
+    ):
+        from fastapi.testclient import TestClient
+
+        from aqr.main import app
+
+        client = TestClient(app)
+        token = _sign("test-empty")
+        with client.websocket_connect(f"/chat/{token}") as ws:
             ws.receive_json()  # connected
             ws.send_text(json.dumps({"type": "message", "content": "  "}))
 
-            # Не должно быть user_echo или progress — клиент просто ждёт дальше.
-            # Подтверждаем: connection всё ещё открыт, можно отправить ping.
             ws.send_text(json.dumps({"type": "ping"}))
             resp = ws.receive_json()
             assert resp["type"] == "pong"
 
-    def test_ws_two_sessions_isolated(self, mock_db, mock_agent):
-        """Две WS в разных session_id независимы (получают разные session_id в connected)."""
+    def test_ws_two_sessions_isolated(
+        self, mock_db, mock_credentials, mock_agent
+    ):
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
         with (
-            client.websocket_connect("/chat/session-A") as ws_a,
-            client.websocket_connect("/chat/session-B") as ws_b,
+            client.websocket_connect(f"/chat/{_sign('session-A')}") as ws_a,
+            client.websocket_connect(f"/chat/{_sign('session-B')}") as ws_b,
         ):
             msg_a = ws_a.receive_json()
             msg_b = ws_b.receive_json()
@@ -220,14 +300,16 @@ class TestChatWS:
             assert msg_b["session_id"] == "session-B"
             assert msg_a["session_id"] != msg_b["session_id"]
 
-    def test_resume_returns_history_message(self, mock_db, mock_agent, monkeypatch):
-        """resume → history-сообщение (даже если БД пуста)."""
+    def test_resume_returns_history_message(
+        self, mock_db, mock_credentials, mock_agent
+    ):
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
-        with client.websocket_connect("/chat/test-resume") as ws:
+        token = _sign("test-resume")
+        with client.websocket_connect(f"/chat/{token}") as ws:
             ws.receive_json()  # connected
             ws.send_text(json.dumps({"type": "resume"}))
             resp = ws.receive_json()
@@ -243,15 +325,9 @@ class TestSaveAndListChatHistory:
 
     @pytest.mark.asyncio
     async def test_save_calls_store_method(self, monkeypatch):
-        """save_chat_message вызывается с правильными аргументами.
-
-        Не использует mock_db фикстуру — тест полностью self-contained,
-        чтобы избежать cross-test pollution с test_api_routes.
-        """
         from aqr import db as db_mod
         from aqr.registry.store import RegistryStore
 
-        # Свой session factory
         class _S:
             async def __aenter__(self):
                 return self
@@ -284,7 +360,6 @@ class TestSaveAndListChatHistory:
 
     @pytest.mark.asyncio
     async def test_load_returns_empty_list_when_db_fails(self, mock_db, monkeypatch):
-        """Если БД недоступна — list_chat_history возвращает []."""
         from aqr.chat import ws as ws_mod
         from aqr.registry.store import RegistryStore
 
@@ -300,7 +375,6 @@ class TestSaveAndListChatHistory:
 
     @pytest.mark.asyncio
     async def test_save_handles_db_failure_silently(self, mock_db):
-        """Если БД упала при save — WS не падает (logged warning)."""
         from aqr.chat import ws as ws_mod
         from aqr.registry.store import RegistryStore
 
@@ -311,5 +385,4 @@ class TestSaveAndListChatHistory:
             RegistryStore.save_chat_message = broken_save
             await ws_mod._save_history("test", "user", "hi")
 
-        # Должно выполниться без exceptions
         await run_save()
