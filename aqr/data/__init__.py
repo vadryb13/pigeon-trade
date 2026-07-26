@@ -1,19 +1,6 @@
-"""MOEX ISS adapter with point-in-time guarantees."""
+"""T-Invest gRPC adapter (замена MOEXAdapter)."""
 
-from typing import TYPE_CHECKING, Any
+from .ohlcv_cache import OhlcvCache
+from .tinvest import INTERVAL_MAP, TInvestAdapter
 
-from .moex import MOEXAdapter
-
-__all__ = ["MOEXAdapter", "DataManifest"]
-
-
-def __getattr__(name: str) -> Any:
-    """Ленивый импорт DataManifest — требует duckdb из [data] extra."""
-    if name == "DataManifest":
-        from .manifest import DataManifest
-        return DataManifest
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-if TYPE_CHECKING:
-    from .manifest import DataManifest
+__all__ = ["TInvestAdapter", "INTERVAL_MAP", "OhlcvCache"]

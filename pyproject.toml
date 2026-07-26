@@ -36,18 +36,20 @@ dependencies = [
     "cryptography>=42",
     # Agent (LangGraph)
     "langgraph>=0.2",
+    # T-Invest gRPC (закрытый PyPI T-Bank — см. AGENTS.md gotcha)
+    "t-tech-investments",
 ]
 
 [project.optional-dependencies]
-# LLM-режим планировщика и нарратора (fallback работает без этого)
+# LLM-режим планировщика и нарратора (без этого ChatPlanner/Narrator не работают)
 llm = [
     "litellm>=1.45,<2.0",
 ]
-# Hypothesis embeddings (дедупликация и semantic search; без extra — деградация)
+# Embeddings для дедупликации (без этого Embedder не работает)
 embeddings = [
     "openai>=1.0",
 ]
-# Point-in-time data manifest + OHLCV-кэш
+# OHLCV-кэш (DuckDB-файл в ~/.aqr/)
 data = [
     "duckdb>=1.0",
 ]
@@ -56,17 +58,25 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.5",
+    "python-multipart",
 ]
 
 [project.urls]
 Repository = "https://github.com/vadryb13/aqr"
 Issues = "https://github.com/vadryb13/aqr/issues"
 
-[project.scripts]
-aqr = "aqr.cli:main"
-
 [tool.setuptools.packages.find]
 include = ["aqr*"]
+
+# t-tech-investments — на закрытом PyPI T-Bank.
+# uv: pip install t-tech-investments \
+#     --index-url https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple
+[[tool.uv.index]]
+name = "tbank"
+url = "https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple"
+
+[tool.uv.sources]
+t-tech-investments = { index = "tbank" }
 
 [tool.pytest.ini_options]
 minversion = "8.0"

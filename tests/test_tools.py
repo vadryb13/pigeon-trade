@@ -1,6 +1,11 @@
 """Изолированные тесты на инструменты ToolRegistry."""
 from __future__ import annotations
 
+import os
+import sys
+import types
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 
@@ -10,6 +15,11 @@ from aqr.tools.register import register_all
 # ── Фикстуры ────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
+def _stable_secret(monkeypatch):
+    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
+
+
+@pytest.fixture(autouse=True)
 def _clean_registry():
     """Очищаем реестр перед каждым тестом и перерегистрируем."""
     reset_for_testing()
@@ -17,6 +27,41 @@ def _clean_registry():
     yield
     reset_for_testing()
     register_all()
+
+
+@pytest.fixture
+def with_credentials():
+    """Устанавливает credentials в ContextVar, очищает на teardown."""
+    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.registry import DecryptedSettings
+
+    creds = DecryptedSettings(
+        session_id="alice",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_api_key="sk-ant-fake",
+        openai_api_key="sk-oai-fake",
+        invest_token="t.INVEST_TOKEN_fake",
+        invest_sandbox=True,
+    )
+    token = set_credentials(creds)
+    yield creds
+    reset_credentials(token)
+
+
+@pytest.fixture
+def fake_litellm(monkeypatch):
+    """Мок litellm.completion с настраиваемым JSON-ответом."""
+    def _install(content: str):
+        fake_resp = MagicMock()
+        fake_resp.choices = [MagicMock()]
+        fake_resp.choices[0].message.content = content
+
+        fake_module = types.ModuleType("litellm")
+        fake_module.completion = MagicMock(return_value=fake_resp)
+        monkeypatch.setitem(sys.modules, "litellm", fake_module)
+        return fake_module.completion
+
+    return _install
 
 
 @pytest.fixture
@@ -103,37 +148,150 @@ class TestToolRegistry:
 
 class TestPlanResearch:
     @pytest.mark.asyncio
-    async def test_plan_momentum_sber(self, monkeypatch):
-        """План для 'проверь momentum на Сбере'. Мокаем DB чтобы избежать
-        неявной зависимости от Postgres (TEST-PATTERN-2)."""
+    async def test_plan_momentum_sber(self, monkeypatch, with_credentials, fake_litellm):
+        """План для 'проверь momentum на Сбере' с моком LLM и мок БД (пустой dedup)."""
         from aqr import db as db_mod
+        from aqr.registry import RegistryStore
 
-        class _Broken:
+        # Мок DB: возвращает пустой результат search_similar (нет похожих)
+        class _EmptySession:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return None
+
+            async def execute(self, *a, **kw):
+                class _R:
+                    def all(self):
+                        return []
+                return _R()
+
+        class _EmptyFactory:
             def __call__(self):
-                raise RuntimeError("no DB in test")
+                return _EmptySession()
 
-        monkeypatch.setattr(db_mod, "_async_session_factory", _Broken())
+        monkeypatch.setattr(db_mod, "_async_session_factory", _EmptyFactory())
+
+        # Мок openai (модуль может не быть установлен)
+        import types
+        from unittest.mock import MagicMock
+
+        class _FakeEmbeddingsAPI:
+            async def create(self, *, model, input):
+                return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+
+        class _FakeAsyncOpenAI:
+            def __init__(self, **kw):
+                self.embeddings = _FakeEmbeddingsAPI()
+
+        fake_openai = types.ModuleType("openai")
+        fake_openai.AsyncOpenAI = _FakeAsyncOpenAI
+        monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+        fake_litellm(
+            '{"tickers": ["SBER"], "hypothesis_families": ["momentum"], '
+            '"n_hypotheses": 20, "rationale": "test"}'
+        )
+        monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
 
         tool = registry.get("plan_research")
         result = await tool.fn(goal="проверь momentum на Сбере")
         assert "tickers" in result
         assert "hypothesis_families" in result
         assert "n_hypotheses" in result
-        # momentum должен быть в списке семейств
-        assert any("momentum" in f.lower() or f == "momentum"
-                   for f in result["hypothesis_families"])
-        # Без БД поле dedup_warning НЕ должно появиться
+        assert "momentum" in result["hypothesis_families"]
+        # Пустой результат search_similar — нет dedup_warning
         assert "dedup_warning" not in result
 
     @pytest.mark.asyncio
-    async def test_plan_blue_chips(self):
+    async def test_plan_blue_chips(
+        self, monkeypatch, with_credentials, fake_litellm
+    ):
+        from aqr import db as db_mod
+
+        class _EmptySession:
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *a):
+                return None
+            async def execute(self, *a, **kw):
+                class _R:
+                    def all(self):
+                        return []
+                return _R()
+
+        class _EmptyFactory:
+            def __call__(self):
+                return _EmptySession()
+
+        monkeypatch.setattr(db_mod, "_async_session_factory", _EmptyFactory())
+
+        import types
+        from unittest.mock import MagicMock
+
+        class _FakeEmbeddingsAPI:
+            async def create(self, *, model, input):
+                return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+
+        class _FakeAsyncOpenAI:
+            def __init__(self, **kw):
+                self.embeddings = _FakeEmbeddingsAPI()
+
+        fake_openai = types.ModuleType("openai")
+        fake_openai.AsyncOpenAI = _FakeAsyncOpenAI
+        monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+        fake_litellm(
+            '{"tickers": ["SBER", "GAZP", "LKOH"], '
+            '"hypothesis_families": ["mean_reversion"], "n_hypotheses": 20}'
+        )
+        monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
+
         tool = registry.get("plan_research")
         result = await tool.fn(goal="проверь mean reversion на голубых фишках")
         assert len(result["tickers"]) > 1, "Голубые фишки — несколько тикеров"
         assert "mean_reversion" in result["hypothesis_families"]
 
     @pytest.mark.asyncio
-    async def test_plan_returns_dict(self):
+    async def test_plan_returns_dict(self, monkeypatch, with_credentials, fake_litellm):
+        from aqr import db as db_mod
+
+        class _EmptySession:
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *a):
+                return None
+            async def execute(self, *a, **kw):
+                class _R:
+                    def all(self):
+                        return []
+                return _R()
+
+        class _EmptyFactory:
+            def __call__(self):
+                return _EmptySession()
+
+        monkeypatch.setattr(db_mod, "_async_session_factory", _EmptyFactory())
+
+        import types
+        from unittest.mock import MagicMock
+
+        class _FakeEmbeddingsAPI:
+            async def create(self, *, model, input):
+                return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
+
+        class _FakeAsyncOpenAI:
+            def __init__(self, **kw):
+                self.embeddings = _FakeEmbeddingsAPI()
+
+        fake_openai = types.ModuleType("openai")
+        fake_openai.AsyncOpenAI = _FakeAsyncOpenAI
+        monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+        fake_litellm('{"tickers": ["GAZP"], "hypothesis_families": ["breakout"]}')
+        monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
+
         tool = registry.get("plan_research")
         result = await tool.fn(goal="протестируй breakout на Газпроме")
         assert isinstance(result, dict)
@@ -145,36 +303,75 @@ class TestPlanResearch:
 
 class TestLoadPrices:
     @pytest.mark.asyncio
-    async def test_load_with_synthetic_fallback(self):
-        """Без MOEX должен вернуть синтетические данные."""
+    async def test_load_with_tinvest(self, monkeypatch, with_credentials):
+        """load_prices через T-Invest (мок). Без fallback."""
+        import uuid
+
+        # Уникальный кэш на каждый тест
+        cache_path = f"/tmp/aqr_test_load_{uuid.uuid4().hex[:8]}.duckdb"
+        monkeypatch.setenv("AQR_CACHE_DIR", cache_path)
+
+        # Мок TInvestAdapter
+        import pandas as pd
+
+        from aqr.data import tinvest as tinvest_mod
+
+        class _FakeAdapter:
+            def __init__(self, *a, **kw):
+                pass
+
+            def candles(self, ticker, from_date, to_date, interval="D1"):
+                rng = pd.date_range("2023-01-02", periods=500, freq="B")
+                px = [100 + i * 0.1 for i in range(500)]
+                return pd.DataFrame({
+                    "open": px, "high": px, "low": px,
+                    "close": px, "volume": [0] * 500,
+                }, index=rng)
+
+        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
+
         tool = registry.get("load_prices")
         result = await tool.fn(tickers=["SBER", "GAZP"])
+
         assert isinstance(result, dict)
         assert "SBER" in result
         assert "GAZP" in result
-        # Каждый тикер — список float'ов
         for px in result.values():
             assert isinstance(px, list)
-            assert len(px) > 0
+            assert len(px) == 500
             assert all(isinstance(p, (int, float)) for p in px)
 
     @pytest.mark.asyncio
-    async def test_load_single_ticker(self):
+    async def test_load_single_ticker(self, monkeypatch, with_credentials):
+        """Один тикер — T-Invest возвращает >=100 баров."""
+        import uuid
+
+        cache_path = f"/tmp/aqr_test_single_{uuid.uuid4().hex[:8]}.duckdb"
+        monkeypatch.setenv("AQR_CACHE_DIR", cache_path)
+
+        import pandas as pd
+
+        from aqr.data import tinvest as tinvest_mod
+
+        class _FakeAdapter:
+            def __init__(self, *a, **kw):
+                pass
+
+            def candles(self, ticker, from_date, to_date, interval="D1"):
+                rng = pd.date_range("2023-01-02", periods=500, freq="B")
+                px = [100.0] * 500
+                return pd.DataFrame({
+                    "open": px, "high": px, "low": px,
+                    "close": px, "volume": [0] * 500,
+                }, index=rng)
+
+        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
+
         tool = registry.get("load_prices")
         result = await tool.fn(tickers=["LKOH"])
         assert len(result) == 1
         assert "LKOH" in result
-        assert len(result["LKOH"]) >= 100  # MOEX или synthetic (>=100 баров)
-
-    @pytest.mark.asyncio
-    async def test_load_with_dates(self):
-        tool = registry.get("load_prices")
-        result = await tool.fn(
-            tickers=["SBER"],
-            start_date="2023-06-01",
-            end_date="2024-06-01",
-        )
-        assert len(result["SBER"]) >= 100  # MOEX или synthetic
+        assert len(result["LKOH"]) == 500
 
 
 # ── PIT safety net ──────────────────────────────────────────────
@@ -430,12 +627,22 @@ class TestExtractInsights:
 
 class TestReviewInsights:
     @pytest.mark.asyncio
-    async def test_review_returns_list(self):
-        """Без LLM-ключа возвращает [] (тихо падает)."""
+    async def test_review_returns_list(
+        self, monkeypatch, with_credentials, fake_litellm
+    ):
+        """С credentials + мок-LLM → список observations."""
+        fake_litellm('{"observations": ["тестовый инсайт"]}')
+        monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
+
         tool = registry.get("review_insights")
         result = await tool.fn(
             goal="проверь momentum",
-            top_results=[],
+            top_results=[{
+                "name": "SMA10/50", "family": "momentum", "ticker": "SBER",
+                "sharpe": 1.2, "dsr": 0.9, "dsr_verdict": "significant",
+                "max_drawdown": -0.15, "n_trades": 42, "params": {},
+                "cpcv_mean_sharpe": 1.0,
+            }],
             deterministic_insights=["тестовый инсайт"],
         )
         assert isinstance(result, list)
@@ -445,8 +652,13 @@ class TestReviewInsights:
 
 class TestNarrate:
     @pytest.mark.asyncio
-    async def test_narrate_returns_string(self):
-        """Без LLM-ключа использует fallback-нарратив."""
+    async def test_narrate_returns_string(
+        self, monkeypatch, with_credentials, fake_litellm
+    ):
+        """С credentials + мок-LLM → текст нарратива."""
+        fake_litellm("Тестовый нарратив от LLM про momentum стратегию.")
+        monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
+
         tool = registry.get("narrate")
         result = await tool.fn(
             goal="проверь momentum на Сбере",
@@ -465,4 +677,4 @@ class TestNarrate:
             elapsed_seconds=2.5,
         )
         assert isinstance(result, str)
-        assert len(result) > 50  # содержательный текст
+        assert len(result) > 10

@@ -78,11 +78,12 @@ async def load_prices(
     end_date: str = "2024-12-31",
     timeframe: str = "D1",
 ) -> dict[str, list[float]]:
-    """Загрузить цены закрытия с MOEX ISS, с fallback на синтетический GBM.
+    """Загрузить цены закрытия с T-Invest gRPC.
 
     Read-through кэш через `aqr.data.ohlcv_cache.OhlcvCache`: если в DuckDB-кэше
-    уже есть данные для тикера/периода/таймфрейма — сеть не дёргается. Если нет —
-    идём в MOEX ISS, ответ складываем в кэш. Финальный fallback — синтетический GBM.
+    уже есть данные для тикера/периода/таймфрейма — сеть не дёргается.
+    Для промахов идём в T-Invest gRPC через `TInvestAdapter`, ответ
+    складываем в кэш. Без fallback — ошибка propagate'ится.
 
     Returns: {ticker: [float, ...]} — списки цен закрытия (для JSON-сериализации).
     """
@@ -90,67 +91,44 @@ async def load_prices(
     import contextlib
 
     from ..data.ohlcv_cache import OhlcvCache
+    from ..data.tinvest import TInvestAdapter
 
     cache = OhlcvCache()
-    cache_timeframe = "D1" if timeframe == "D1" else timeframe
 
-    # Этап 1: проверить кэш для всех тикеров. Каждый read уходит в
-    # threadpool (PERF-7 — не блокируем event loop), но сериализуем —
-    # DuckDB не разрешает несколько соединений к одному файлу одновременно
-    # ("Can't open a connection to same database file with a different
-    # configuration than existing connections").
+    # Этап 1: проверить кэш для всех тикеров.
     cached_series: dict[str, pd.Series] = {}
-    needs_moex: list[str] = []
+    needs_remote: list[str] = []
     for t in tickers:
         df = await asyncio.to_thread(
-            cache.get_cached, t, start_date, end_date, cache_timeframe,
+            cache.get_cached, t, start_date, end_date, timeframe,
         )
         if df is not None and len(df) >= 100:
             cached_series[t] = df["close"].astype(float)
         else:
-            needs_moex.append(t)
+            needs_remote.append(t)
 
-    # Этап 2: для промахов идём в MOEX (с fallback на synthetic).
-    # MOEXAdapter.candles синхронный (requests.Session) — оборачиваем в
-    # asyncio.to_thread чтобы не блокировать event loop (PERF-3).
-    moex_series: dict[str, pd.Series] = {}
-    if needs_moex:
-        try:
-            from ..data.moex import MOEXAdapter
+    # Этап 2: для промахов идём в T-Invest. Без retry/CB — одна попытка
+    # (см. AGENTS.md инвариант 8). Ошибки propagate'ится.
+    remote_series: dict[str, pd.Series] = {}
+    if needs_remote:
+        adapter = TInvestAdapter()
 
-            adapter = MOEXAdapter()
+        async def _fetch_one(t: str) -> tuple[str, pd.Series]:
+            df = await asyncio.to_thread(
+                adapter.candles, t, start_date, end_date, timeframe,
+            )
+            if len(df) < 100:
+                raise ValueError(f"мало данных ({len(df)} строк)")
+            with contextlib.suppress(Exception):
+                cache.put_cache(t, df, timeframe)
+            return t, df["close"].astype(float)
 
-            async def _fetch_one(t: str) -> tuple[str, pd.Series]:
-                try:
-                    df = await asyncio.to_thread(
-                        adapter.candles,
-                        t,
-                        start_date,
-                        end_date,
-                        "D" if timeframe == "D1" else "1H",
-                    )
-                    if len(df) < 100:
-                        raise ValueError(f"мало данных ({len(df)} строк)")
-                    with contextlib.suppress(Exception):
-                        cache.put_cache(t, df, cache_timeframe)
-                    return t, df["close"].astype(float)
-                except Exception:
-                    return t, _synthetic_series(t, start_date, end_date)
+        results = await asyncio.gather(*[_fetch_one(t) for t in needs_remote])
+        remote_series = dict(results)
 
-            results = await asyncio.gather(*[_fetch_one(t) for t in needs_moex])
-            moex_series = dict(results)
-        except Exception:
-            for t in needs_moex:
-                moex_series[t] = _synthetic_series(t, start_date, end_date)
-
-    result = {**cached_series, **moex_series}
+    result = {**cached_series, **remote_series}
 
     # ── PIT safety net ────────────────────────────────────────────────
-    # Если цены содержат необработанные корпоративные действия (дивиденды,
-    # сплиты), `pct_change()` покажет синтетический gap. Страхуемся —
-    # логируем warning при дневных движениях > 20% (типичный сигнал
-    # необработанного corp-action). Полноценный PIT — отдельная задача
-    # (DEAD-2 в REVIEW.md), здесь только предохранитель.
     _pit_check_anomalous_returns(result)
 
     return {t: s.tolist() for t, s in result.items()}
@@ -167,7 +145,7 @@ def _pit_check_anomalous_returns(prices: dict[str, pd.Series]) -> None:
     """PIT safety net: warning при подозрительных дневных движениях.
 
     Не вмешивается в данные — только логирует. Полноценный PIT
-    (дивиденды, сплиты) — отдельная задача (DEAD-2).
+    (дивиденды, сплиты) — отдельная задача.
     """
     for ticker, series in prices.items():
         if len(series) < 2:
@@ -175,7 +153,6 @@ def _pit_check_anomalous_returns(prices: dict[str, pd.Series]) -> None:
         rets = series.pct_change().dropna()
         anomalous = rets[rets.abs() > _PIT_RETURN_THRESHOLD]
         if not anomalous.empty:
-            # Берём топ-3 самых больших для контекста в логе
             worst = anomalous.abs().nlargest(3)
             examples = ", ".join(
                 f"{dt.date()}: {r:+.1%}"
@@ -186,22 +163,6 @@ def _pit_check_anomalous_returns(prices: dict[str, pd.Series]) -> None:
                 "— possible unprocessed corporate action: %s",
                 ticker, len(anomalous), _PIT_RETURN_THRESHOLD * 100, examples,
             )
-
-
-def _synthetic_series(
-    ticker: str, start_date: str, end_date: str = "2024-12-31"
-) -> pd.Series:
-    """Детерминистический GBM — воспроизводимо для одного тикера."""
-    rng = np.random.default_rng(hash(ticker) % (2**32))
-    n = 500
-    drift = 0.0005
-    vol = 0.015
-    r = rng.normal(drift, vol, n)
-    r[100:200] += 0.002
-    r[300:400] -= 0.001
-    px = 100 * np.exp(np.cumsum(r))
-    idx = pd.date_range(start_date, periods=n, freq="B")
-    return pd.Series(px, index=idx, name=ticker)
 
 
 # ── generate_hypotheses_tool ────────────────────────────────────
