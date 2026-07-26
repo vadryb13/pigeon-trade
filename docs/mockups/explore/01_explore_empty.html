@@ -41,21 +41,36 @@ html, body {
 .empty-card h2 { font-size: 22px; font-weight: 500; color: var(--text); margin: 0 0 12px; }
 .empty-card p { color: var(--muted); margin: 0 0 30px; font-size: 14px; line-height: 1.6; }
 
-/* count selector */
-.count-selector {
+/* count input */
+.count-input {
   display: inline-flex; align-items: center; gap: 12px;
   margin: 0 0 28px;
   background: var(--bg-elev); border: 1px solid var(--border);
   padding: 12px 16px; border-radius: 10px;
 }
-.count-selector label { font-size: 13px; color: var(--muted); }
-.count-buttons { display: flex; gap: 4px; }
-.count-buttons button {
-  width: 36px; height: 36px;
+.count-input label { font-size: 13px; color: var(--muted); }
+.count-input .num-wrap {
+  display: inline-flex; align-items: center;
   background: var(--bg); border: 1px solid var(--border);
-  color: var(--text); border-radius: 6px; cursor: pointer; font: inherit; font-size: 14px;
+  border-radius: 6px; overflow: hidden;
 }
-.count-buttons button.active { background: var(--accent); color: #0a1828; border-color: var(--accent); font-weight: 600; }
+.count-input .num-wrap input {
+  width: 60px; padding: 6px 10px; background: transparent;
+  border: 0; color: var(--text); font: inherit; font-size: 18px;
+  font-weight: 600; text-align: center;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.count-input .num-wrap input:focus { outline: none; background: rgba(124, 183, 255, 0.05); }
+.count-input .num-wrap input::-webkit-outer-spin-button,
+.count-input .num-wrap input::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.count-input .num-wrap span {
+  padding: 0 12px; color: var(--muted); font-size: 13px;
+  border-left: 1px solid var(--border);
+}
+.count-input .hint { font-size: 11px; color: var(--muted); font-style: italic; }
 
 .btn {
   padding: 12px 28px; border-radius: 8px; border: 1px solid var(--border);
@@ -67,13 +82,6 @@ html, body {
   background: var(--accent); color: #0a1828; border-color: var(--accent);
   font-weight: 600; padding: 14px 32px; font-size: 16px;
 }
-
-.flow {
-  display: flex; justify-content: center; align-items: center; gap: 8px;
-  margin-top: 28px; font-size: 12px; color: var(--muted);
-}
-.flow-step { display: flex; align-items: center; gap: 6px; }
-.flow-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 
 .tip {
   margin: 30px auto 0; max-width: 600px;
@@ -112,32 +120,17 @@ html, body {
       Финальный отбор — за тобой.
     </p>
 
-    <div class="count-selector">
-      <label>Generate</label>
-      <div class="count-buttons">
-        <button>1</button>
-        <button>2</button>
-        <button class="active">3</button>
-        <button>4</button>
-        <button>5</button>
+    <div class="count-input">
+      <label for="count">Generate</label>
+      <div class="num-wrap">
+        <input id="count" type="number" value="3" min="1" max="20">
+        <span>hypotheses</span>
       </div>
-      <label>hypotheses in parallel</label>
+      <span class="hint">max 20 · default 3 · concurrency-limit 3 (остальные → queued)</span>
     </div>
 
     <div>
       <button class="btn btn-primary">🤖 Generate &amp; research in parallel →</button>
-    </div>
-
-    <div class="flow">
-      <div class="flow-step"><span class="flow-dot"></span> Empty</div>
-      <div style="color: var(--muted);">— → —</div>
-      <div class="flow-step" style="color: var(--text);">researching (browser + editor)</div>
-      <div style="color: var(--muted);">— → —</div>
-      <div class="flow-step" style="color: var(--text);">isolated cells</div>
-      <div style="color: var(--muted);">— → —</div>
-      <div class="flow-step" style="color: var(--text);">your confirm</div>
-      <div style="color: var(--muted);">— → —</div>
-      <div class="flow-step" style="color: var(--text);">spreadsheet (idea)</div>
     </div>
   </div>
 
