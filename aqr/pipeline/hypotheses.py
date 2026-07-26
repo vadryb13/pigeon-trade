@@ -6,8 +6,9 @@
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Iterable
+
 import numpy as np
 import pandas as pd
 
@@ -120,46 +121,87 @@ def generate_hypotheses(
     return specs
 
 
-def _make_one(family: str, ticker: str, rng) -> HypothesisSpec | None:
+def _sample_params(family: str, rng) -> dict | None:
+    """Случайные параметры для семейства (для random-режима)."""
     if family == "momentum":
         fast = int(rng.choice([5, 10, 20]))
         slow = int(rng.choice([50, 100, 200]))
         if fast >= slow:
             slow = fast * 4
-        return HypothesisSpec(
-            name=f"SMA{fast}/{slow}",
-            family="momentum",
-            ticker=ticker,
-            params={"fast": fast, "slow": slow},
-            fn=_sma_crossover(fast, slow),
-        )
+        return {"fast": fast, "slow": slow}
     if family == "mean_reversion":
         lb = int(rng.choice([10, 20, 40]))
         th = float(rng.choice([1.0, 1.5, 2.0]))
-        return HypothesisSpec(
-            name=f"MR-z{th}/{lb}",
-            family="mean_reversion",
-            ticker=ticker,
-            params={"lookback": lb, "threshold": th},
-            fn=_mean_reversion(lb, th),
-        )
+        return {"lookback": lb, "threshold": th}
     if family == "breakout":
         lb = int(rng.choice([20, 55, 100]))
-        return HypothesisSpec(
-            name=f"Donchian-{lb}",
-            family="breakout",
-            ticker=ticker,
-            params={"lookback": lb},
-            fn=_breakout(lb),
-        )
+        return {"lookback": lb}
     if family == "volatility":
         lb = int(rng.choice([10, 20]))
         vt = float(rng.choice([0.005, 0.010, 0.015]))
+        return {"lookback": lb, "vol_threshold": vt}
+    return None
+
+
+def _name_for(family: str, params: dict) -> str:
+    """Каноническое имя гипотезы — функция только от params."""
+    if family == "momentum":
+        return f"SMA{params['fast']}/{params['slow']}"
+    if family == "mean_reversion":
+        return f"MR-z{params['threshold']}/{params['lookback']}"
+    if family == "breakout":
+        return f"Donchian-{params['lookback']}"
+    if family == "volatility":
+        return f"VolMom-{params['lookback']}/{params['vol_threshold']}"
+    return "?"
+
+
+def _make_spec(family: str, ticker: str, params: dict) -> HypothesisSpec | None:
+    """Собрать HypothesisSpec из params. Единая точка для random и dict-режимов."""
+    if family == "momentum":
         return HypothesisSpec(
-            name=f"VolMom-{lb}/{vt}",
+            name=_name_for(family, params),
+            family="momentum",
+            ticker=ticker,
+            params={"fast": params["fast"], "slow": params["slow"]},
+            fn=_sma_crossover(params["fast"], params["slow"]),
+        )
+    if family == "mean_reversion":
+        return HypothesisSpec(
+            name=_name_for(family, params),
+            family="mean_reversion",
+            ticker=ticker,
+            params={"lookback": params["lookback"], "threshold": params["threshold"]},
+            fn=_mean_reversion(params["lookback"], params["threshold"]),
+        )
+    if family == "breakout":
+        return HypothesisSpec(
+            name=_name_for(family, params),
+            family="breakout",
+            ticker=ticker,
+            params={"lookback": params["lookback"]},
+            fn=_breakout(params["lookback"]),
+        )
+    if family == "volatility":
+        return HypothesisSpec(
+            name=_name_for(family, params),
             family="volatility",
             ticker=ticker,
-            params={"lookback": lb, "vol_threshold": vt},
-            fn=_volatility_filter(lb, vt),
+            params={"lookback": params["lookback"], "vol_threshold": params["vol_threshold"]},
+            fn=_volatility_filter(params["lookback"], params["vol_threshold"]),
         )
     return None
+
+
+def _make_one(family: str, ticker: str, rng) -> HypothesisSpec | None:
+    """Случайная гипотеза — сэмплируем params и строим spec."""
+    params = _sample_params(family, rng)
+    if params is None:
+        return None
+    return _make_spec(family, ticker, params)
+
+
+def make_one_with_params(family: str, ticker: str, params: dict) -> HypothesisSpec | None:
+    """HypothesisSpec по готовому dict (используется инструментами при
+    восстановлении спецификации из результата бэктеста)."""
+    return _make_spec(family, ticker, params)

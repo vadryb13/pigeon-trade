@@ -16,8 +16,12 @@ import asyncio
 import json
 import sys
 
+from aqr.logging_config import setup_logging
 from aqr.pipeline import ChatPlanner, PipelineExecutor
 from aqr.pipeline.events import EventBus
+
+# Configure logging from AQR_LOG_JSON env var (default: human-readable)
+setup_logging()
 
 
 def _fmt_event(ev) -> str:
@@ -63,7 +67,7 @@ async def _run(goal: str, as_json: bool, quiet: bool) -> int:
     result = await executor.run(run_id, plan)
     try:
         await asyncio.wait_for(sub_task, timeout=2.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         sub_task.cancel()
 
     if as_json:

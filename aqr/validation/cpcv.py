@@ -14,8 +14,8 @@ Advances in Financial Machine Learning, ch. 12.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from itertools import combinations
-from typing import Iterator
 
 import numpy as np
 import pandas as pd
@@ -33,7 +33,7 @@ def _get_test_ranges(
         List of test paths. Каждый path = список (start, end) tuples.
     """
     T = len(timestamps)
-    if T < n_splits:
+    if n_splits > T:
         raise ValueError(f"Not enough samples ({T}) for {n_splits} splits")
 
     fold_size = T // n_splits

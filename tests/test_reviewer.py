@@ -5,10 +5,8 @@ import sys
 import types
 from unittest.mock import MagicMock
 
-import pytest
-
 from aqr.pipeline import InsightReviewer
-from aqr.pipeline.executor import PipelineResult, BacktestResult
+from aqr.pipeline.executor import BacktestResult, PipelineResult
 from aqr.pipeline.hypotheses import HypothesisSpec
 from aqr.pipeline.planner import ResearchPlan
 

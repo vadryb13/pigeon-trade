@@ -14,9 +14,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from aqr import tasks
 from aqr.db import get_db
 from aqr.registry import RegistryStore
 
@@ -24,17 +25,45 @@ from .events import BUS
 from .executor import PipelineExecutor
 from .planner import ChatPlanner
 
-
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 
 class RunRequest(BaseModel):
+    """POST /pipeline/runs body.
+
+    `goal` валидируется: длина 3–2000, после strip не пустая. Защита от
+    спам-запросов и log-injection через control chars (SEC-3).
+    """
+
+    goal: str = Field(..., min_length=3, max_length=2000)
+
+    @field_validator("goal")
+    @classmethod
+    def _strip_and_check(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("goal cannot be empty or whitespace-only")
+        return v
+
+
+class PlanResponse(BaseModel):
+    """Типизированный план в ответе /pipeline/runs (TYPE-1).
+
+    Раньше возвращался как `dict[str, Any]` — клиенты не могли типизировать
+    и IDE не помогала. Здесь — explicit schema.
+    """
+
     goal: str
+    tickers: list[str]
+    timeframe: str
+    hypothesis_families: list[str]
+    n_hypotheses: int
+    rationale: str = ""
 
 
 class RunStarted(BaseModel):
     run_id: str
-    plan: dict[str, Any]
+    plan: PlanResponse
 
 
 @router.post("/runs", response_model=RunStarted)
@@ -46,27 +75,40 @@ async def start_run(
     planner = ChatPlanner()
     plan = planner.plan(req.goal)
 
-    run_id = BUS.new_run()
+    # Генерируем UUID ОДИН раз — он должен совпадать в BUS и в БД (иначе FK-violation
+    # при create_hypothesis в фоне). Найдено в REVIEW.md / вживую 2026-07-19.
+    run_id = uuid.uuid4()
+    run_id_str = str(run_id)
+
+    # Регистрируем run в BUS для EventBus
+    BUS._history[run_id_str] = []
+    BUS._subscribers[run_id_str] = []
+    BUS._done[run_id_str] = asyncio.Event()
+
     executor = PipelineExecutor(BUS)
 
-    # Сохраняем run в БД как "running"
+    # Сохраняем run в БД как "running" с явным UUID
     store = RegistryStore(db)
-    run_uuid = uuid.UUID(run_id)
     await store.get_or_create_session("default")
-    await store.create_run(goal=req.goal, session_id="default", status="running")
+    await store.create_run(
+        id=run_id, goal=req.goal, session_id="default", status="running",
+    )
     await db.commit()
 
-    # Фоновый запуск с сохранением результата
-    asyncio.create_task(_run_and_persist(run_id, plan, executor))
+    # Фоновый запуск с сохранением результата (с retention — иначе GC)
+    tasks.schedule(_run_and_persist(run_id_str, plan, executor))
 
-    return RunStarted(run_id=run_id, plan={
-        "goal": plan.goal,
-        "tickers": plan.tickers,
-        "timeframe": plan.timeframe,
-        "hypothesis_families": plan.hypothesis_families,
-        "n_hypotheses": plan.n_hypotheses,
-        "rationale": plan.rationale,
-    })
+    return RunStarted(
+        run_id=run_id_str,
+        plan=PlanResponse(
+            goal=plan.goal,
+            tickers=plan.tickers,
+            timeframe=plan.timeframe,
+            hypothesis_families=plan.hypothesis_families,
+            n_hypotheses=plan.n_hypotheses,
+            rationale=plan.rationale,
+        ),
+    )
 
 
 @router.get("/runs/{run_id}")
@@ -112,11 +154,9 @@ async def _run_and_persist(
 
     try:
         result = await executor.run(run_id, plan)
-        status = "done"
     except Exception:
         # executor.run() уже эмитит error-событие, сохраняем статус
         result = None
-        status = "error"
 
     # Новая сессия для фоновой записи (request-сессия уже закрыта)
     async with _async_session_factory() as db:
@@ -135,8 +175,20 @@ async def _run_and_persist(
                 },
             )
 
-            # Сохраняем гипотезы
-            for r in result.top:
+            # Генерируем эмбеддинги параллельно (asyncio.gather) — для топ-5
+            # последовательные RTT к OpenAI = 5× задержка. Hash-fallback
+            # работает локально и быстро, но gather всё равно корректен (PERF-8).
+            from aqr.registry.embeddings import Embedder
+            embedder = Embedder()
+            embeddings = await asyncio.gather(*[
+                embedder.embed_hypothesis(
+                    r.hypothesis.family,
+                    r.hypothesis.ticker,
+                    r.hypothesis.params,
+                )
+                for r in result.top
+            ])
+            for r, embedding in zip(result.top, embeddings):
                 await store.create_hypothesis(
                     run_id=run_uuid,
                     family=r.hypothesis.family,
@@ -147,6 +199,7 @@ async def _run_and_persist(
                     sharpe=r.sharpe,
                     max_drawdown=r.max_drawdown,
                     is_valid=r.dsr_verdict in ("significant", "borderline"),
+                    embedding=embedding,
                 )
         else:
             await store.update_run_status(run_uuid, status="error")

@@ -12,9 +12,8 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any
-
 
 # Известные тикеры MOEX (базовое покрытие, для fallback-парсера)
 MOEX_TICKERS = {

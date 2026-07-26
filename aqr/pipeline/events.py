@@ -7,11 +7,13 @@ Event bus — публикация событий во время исполне
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -53,10 +55,8 @@ class EventBus:
     async def publish(self, event: Event) -> None:
         self._history.setdefault(event.run_id, []).append(event)
         for q in self._subscribers.get(event.run_id, []):
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 q.put_nowait(event)
-            except asyncio.QueueFull:
-                pass
         if event.kind in ("done", "error"):
             done = self._done.get(event.run_id)
             if done:
@@ -80,7 +80,7 @@ class EventBus:
             while True:
                 try:
                     ev = await asyncio.wait_for(q.get(), timeout=30.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # keep-alive tick — вернём "тишина", чтобы UI понимал что мы живы
                     continue
                 yield ev

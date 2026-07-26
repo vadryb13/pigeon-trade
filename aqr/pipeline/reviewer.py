@@ -18,7 +18,6 @@ import os
 
 from .executor import PipelineResult
 
-
 REVIEWER_SYSTEM = """Ты старший quant-ресёрчер. Тебе показали результат прогона:
 цель, план, топ-5 гипотез с DSR/Sharpe/n, PBO портфеля, детерминистичные наблюдения.
 

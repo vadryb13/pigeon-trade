@@ -4,8 +4,6 @@ from __future__ import annotations
 import asyncio
 import os
 
-import pytest
-
 # Форсируем synthetic-путь: отключаем LLM и MOEX
 os.environ.pop("ANTHROPIC_API_KEY", None)
 os.environ.pop("OPENAI_API_KEY", None)
@@ -38,11 +36,10 @@ def test_pipeline_synthetic_end_to_end(monkeypatch):
     Полный прогон без сети: планировщик → executor → narrator.
     Проверяем, что события идут, результат заполнен, нарратив непустой.
     """
-    from aqr.pipeline import ChatPlanner, PipelineExecutor
-    from aqr.pipeline.events import EventBus
-
     # Форсируем synthetic-путь: сломаем MOEXAdapter
     from aqr.data import moex as moex_mod
+    from aqr.pipeline import ChatPlanner, PipelineExecutor
+    from aqr.pipeline.events import EventBus
 
     class _BrokenAdapter:
         def __init__(self, *a, **kw): pass
@@ -72,7 +69,7 @@ def test_pipeline_synthetic_end_to_end(monkeypatch):
         # Ждём, чтобы подписчик успел получить done
         try:
             await asyncio.wait_for(sub, timeout=2.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             sub.cancel()
         return result
 
@@ -97,9 +94,9 @@ def test_pipeline_synthetic_end_to_end(monkeypatch):
 
 
 def test_narrator_fallback_contains_key_facts():
+    from aqr.data import moex as moex_mod
     from aqr.pipeline import ChatPlanner, PipelineExecutor
     from aqr.pipeline.events import EventBus
-    from aqr.data import moex as moex_mod
 
     class _BrokenAdapter:
         def __init__(self, *a, **kw): pass

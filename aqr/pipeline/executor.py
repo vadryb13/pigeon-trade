@@ -11,74 +11,25 @@ PipelineExecutor — исполняет ResearchPlan шаг за шагом, п�
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict
 from typing import Any
+
 import numpy as np
 import pandas as pd
 
-from .events import EventBus, Event
-from .hypotheses import HypothesisSpec, generate_hypotheses
+from ..types import BacktestResult, PipelineResult
+from .events import Event, EventBus
+from .hypotheses import HypothesisSpec
 from .planner import ResearchPlan
 
+_logger = logging.getLogger(__name__)
+
 # Валидация из существующих модулей
-from ..validation.deflated_sharpe import deflated_sharpe_ratio
 from ..validation.cpcv import CombinatorialPurgedCV
+from ..validation.deflated_sharpe import deflated_sharpe_ratio
 from ..validation.pbo import probability_of_backtest_overfitting
-
-
-@dataclass
-class BacktestResult:
-    hypothesis: HypothesisSpec
-    sharpe: float
-    dsr: float
-    dsr_verdict: str
-    cpcv_mean_sharpe: float
-    cpcv_std_sharpe: float
-    max_drawdown: float
-    n_trades: int
-    daily_returns: list[float]  # для PBO
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.hypothesis.name,
-            "family": self.hypothesis.family,
-            "ticker": self.hypothesis.ticker,
-            "params": self.hypothesis.params,
-            "sharpe": round(self.sharpe, 3),
-            "dsr": round(self.dsr, 3),
-            "dsr_verdict": self.dsr_verdict,
-            "cpcv_mean_sharpe": round(self.cpcv_mean_sharpe, 3),
-            "cpcv_std_sharpe": round(self.cpcv_std_sharpe, 3),
-            "max_drawdown": round(self.max_drawdown, 3),
-            "n_trades": self.n_trades,
-        }
-
-
-@dataclass
-class PipelineResult:
-    run_id: str
-    plan: ResearchPlan
-    n_hypotheses_tested: int
-    n_survived_dsr: int
-    portfolio_pbo: float
-    portfolio_pbo_verdict: str
-    top: list[BacktestResult] = field(default_factory=list)
-    elapsed_seconds: float = 0.0
-    narrative: str = ""
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "run_id": self.run_id,
-            "plan": asdict(self.plan),
-            "n_hypotheses_tested": self.n_hypotheses_tested,
-            "n_survived_dsr": self.n_survived_dsr,
-            "portfolio_pbo": round(self.portfolio_pbo, 3),
-            "portfolio_pbo_verdict": self.portfolio_pbo_verdict,
-            "top": [r.to_dict() for r in self.top],
-            "elapsed_seconds": round(self.elapsed_seconds, 2),
-            "narrative": self.narrative,
-        }
 
 
 class PipelineExecutor:
@@ -90,49 +41,73 @@ class PipelineExecutor:
     async def run(self, run_id: str, plan: ResearchPlan) -> PipelineResult:
         t0 = time.time()
 
+        # Инициализируем реестр инструментов
+        from ..tools import registry as tool_registry
+        from ..tools.register import register_all
+        register_all()
+
         try:
             await self._emit(run_id, "planning", "План принят",
                              f"{len(plan.tickers)} тикеров, {plan.n_hypotheses} гипотез",
                              {"plan": asdict(plan)})
 
-            # 1. Данные
-            prices = await self._load_data(run_id, plan)
+            # 1. Данные — через инструмент load_prices
+            prices = await self._load_data_via_tool(run_id, plan, tool_registry)
 
-            # 2. Гипотезы
+            # 2. Гипотезы — через инструмент generate_hypotheses
             await self._emit(run_id, "generating", "Генерирую гипотезы",
                              f"Разбрасываю {plan.n_hypotheses} гипотез по "
                              f"{len(plan.tickers)} тикерам и {len(plan.hypothesis_families)} семействам")
-            specs = generate_hypotheses(
+            gen_tool = tool_registry.get("generate_hypotheses")
+            specs_raw = await gen_tool.fn(
                 tickers=plan.tickers,
                 families=plan.hypothesis_families,
                 n=plan.n_hypotheses,
             )
 
-            # 3. Бэктест каждой + DSR
+            # 3. Бэктест каждой + DSR — через инструмент backtest_one
+            bt_tool = tool_registry.get("backtest_one")
             results: list[BacktestResult] = []
-            for i, spec in enumerate(specs, 1):
-                if spec.ticker not in prices:
+            for i, h in enumerate(specs_raw, 1):
+                ticker = h["ticker"]
+                if ticker not in prices:
                     continue
-                r = self._backtest_one(spec, prices[spec.ticker], plan)
+                validation_cfg = (
+                    plan.validation if isinstance(getattr(plan, "validation", None), dict) else {}
+                )
+                bt_raw = await bt_tool.fn(
+                    hypothesis=h,
+                    prices=prices[ticker].tolist(),
+                    n_hypotheses=plan.n_hypotheses,
+                    cpcv_splits=int(validation_cfg.get("cpcv_splits", 6)),
+                    cpcv_test_splits=int(validation_cfg.get("cpcv_test_splits", 2)),
+                    embargo_pct=float(validation_cfg.get("embargo_pct", 0.01)),
+                )
+                if "error" in bt_raw:
+                    continue
+                # Конвертируем dict → BacktestResult
+                r = self._dict_to_backtest_result(bt_raw)
                 results.append(r)
                 await self._emit(
                     run_id, "backtesting",
-                    f"Бэктест {i}/{len(specs)}",
-                    spec.describe(),
+                    f"Бэктест {i}/{len(specs_raw)}",
+                    h.get("name", h.get("family", "?")),
                     {
-                        "i": i, "n": len(specs),
-                        "name": spec.describe(),
+                        "i": i, "n": len(specs_raw),
+                        "name": h.get("name", "?"),
                         "sharpe": round(r.sharpe, 2),
                         "dsr_verdict": r.dsr_verdict,
                     },
                 )
-                # даём event loop дышать
                 await asyncio.sleep(0)
 
-            # 4. Валидация портфеля через PBO
+            # 4. Валидация портфеля через PBO — через инструмент validate_portfolio
             await self._emit(run_id, "validating", "PBO по всему портфелю",
                              "Считаю Probability of Backtest Overfitting")
-            pbo_result = self._portfolio_pbo(results)
+            val_tool = tool_registry.get("validate_portfolio")
+            pbo_result = await val_tool.fn(
+                results=[r.to_dict() for r in results],
+            )
 
             # 5. Ранжирование
             survived = [r for r in results
@@ -150,25 +125,48 @@ class PipelineExecutor:
                 elapsed_seconds=time.time() - t0,
             )
 
-            # Инсайты: сначала детерминистичные, потом LLM-review
-            det_insights = self._extract_insights(result)
+            # Инсайты: сначала детерминистичные — через инструмент extract_insights
+            ins_tool = tool_registry.get("extract_insights")
+            det_insights = await ins_tool.fn(
+                top_results=[r.to_dict() for r in top],
+                n_tested=result.n_hypotheses_tested,
+                n_survived=result.n_survived_dsr,
+                pbo=result.portfolio_pbo,
+                pbo_verdict=result.portfolio_pbo_verdict,
+            )
             for insight in det_insights:
                 await self._emit(run_id, "insight", "Инсайт", insight)
 
-            # LLM-review: если модель доступна, добавляем 0-3 наблюдения;
-            # без ключа или при ошибке тихо возвращает [] — пайплайн не ломается.
-            from .reviewer import InsightReviewer
-            reviewer = InsightReviewer()
-            extra = reviewer.review(result, det_insights)
-            for obs in extra:
-                await self._emit(run_id, "insight", "Аналитик", obs, {"source": "llm"})
+            # LLM-review — через инструмент review_insights
+            rev_tool = tool_registry.get("review_insights")
+            try:
+                extra = await rev_tool.fn(
+                    goal=plan.goal,
+                    top_results=[r.to_dict() for r in top],
+                    deterministic_insights=det_insights,
+                    pbo=result.portfolio_pbo,
+                    pbo_verdict=result.portfolio_pbo_verdict,
+                )
+                for obs in extra:
+                    await self._emit(run_id, "insight", "Аналитик", obs, {"source": "llm"})
+            except Exception:
+                pass
 
-            # Нарратив
-            from .narrator import Narrator
+            # Нарратив — через инструмент narrate
+            nar_tool = tool_registry.get("narrate")
             await self._emit(run_id, "narrating", "Пишу резюме", "")
             try:
-                narrator = Narrator()
-                result.narrative = narrator.narrate(result)
+                result.narrative = await nar_tool.fn(
+                    goal=plan.goal,
+                    tickers=plan.tickers,
+                    families=plan.hypothesis_families,
+                    n_tested=result.n_hypotheses_tested,
+                    n_survived=result.n_survived_dsr,
+                    pbo=result.portfolio_pbo,
+                    pbo_verdict=result.portfolio_pbo_verdict,
+                    top_results=[r.to_dict() for r in top],
+                    elapsed_seconds=result.elapsed_seconds,
+                )
             except Exception as e:
                 result.narrative = f"(narrator error: {e})"
 
@@ -182,205 +180,56 @@ class PipelineExecutor:
                              {"exception": type(e).__name__})
             raise
 
-    # ---------- ШАГИ ----------
+    # ---------- ХЕЛПЕРЫ ДЛЯ ИНТЕГРАЦИИ С TOOL REGISTRY ----------
 
-    async def _load_data(self, run_id: str, plan: ResearchPlan) -> dict[str, pd.Series]:
+    async def _load_data_via_tool(self, run_id: str, plan: ResearchPlan,
+                                  tool_registry) -> dict[str, pd.Series]:
+        """Загрузка данных через инструмент load_prices с эмиссией событий."""
+        load_tool = tool_registry.get("load_prices")
+        for t in plan.tickers:
+            await self._emit(run_id, "data", f"Загружаю {t}",
+                             f"MOEX ISS: {plan.start_date} → {plan.end_date}")
+
+        prices_raw = await load_tool.fn(
+            tickers=plan.tickers,
+            start_date=plan.start_date,
+            end_date=plan.end_date,
+            timeframe=plan.timeframe,
+        )
+
+        # Конвертируем list[float] → pd.Series с правильным индексом
         prices: dict[str, pd.Series] = {}
-
-        # Пытаемся MOEX. Если сеть недоступна — synthetic.
-        try:
-            from ..data.moex import MOEXAdapter
-            adapter = MOEXAdapter()
-            for t in plan.tickers:
-                await self._emit(run_id, "data", f"Загружаю {t}",
-                                 f"MOEX ISS: {plan.start_date} → {plan.end_date}")
-                try:
-                    df = adapter.candles(
-                        t, plan.start_date, plan.end_date,
-                        interval=24 if plan.timeframe == "D1" else 60,
-                    )
-                    if len(df) < 100:
-                        raise ValueError(f"мало данных ({len(df)} строк)")
-                    prices[t] = df["close"].astype(float)
-                    await self._emit(run_id, "data", f"{t}: {len(df)} свечей",
-                                     "OK", {"ticker": t, "n": len(df)})
-                except Exception as e:
-                    await self._emit(run_id, "data",
-                                     f"MOEX недоступен для {t}",
-                                     f"использую синтетику: {e}",
-                                     {"ticker": t, "fallback": True})
-                    prices[t] = self._synthetic_series(t, plan)
-        except Exception as e:
-            await self._emit(run_id, "data",
-                             "MOEX-адаптер недоступен, синтетические данные",
-                             str(e), {"fallback": True})
-            for t in plan.tickers:
-                prices[t] = self._synthetic_series(t, plan)
-
+        n_bars = max((len(v) for v in prices_raw.values()), default=500)
+        idx = pd.date_range(plan.start_date, periods=n_bars, freq="B")
+        for t, px_list in prices_raw.items():
+            s = pd.Series(px_list, index=idx[:len(px_list)], name=t)
+            prices[t] = s
+            await self._emit(run_id, "data", f"{t}: {len(px_list)} свечей",
+                             "OK", {"ticker": t, "n": len(px_list)})
         return prices
 
-    def _synthetic_series(self, ticker: str, plan: ResearchPlan) -> pd.Series:
-        """Детерминистический GBM для тикера — воспроизводимо."""
-        rng = np.random.default_rng(hash(ticker) % (2**32))
-        n = 500
-        drift = 0.0005
-        vol = 0.015
-        r = rng.normal(drift, vol, n)
-        # добавляем режимную структуру: тренд-флэт-тренд
-        r[100:200] += 0.002
-        r[300:400] -= 0.001
-        px = 100 * np.exp(np.cumsum(r))
-        idx = pd.date_range(plan.start_date, periods=n, freq="B")
-        return pd.Series(px, index=idx, name=ticker)
-
-    def _backtest_one(self, spec: HypothesisSpec, prices: pd.Series,
-                      plan: ResearchPlan) -> BacktestResult:
-        pos = spec.fn(prices)
-        # позиция сдвигается на 1 бар, чтобы избежать look-ahead
-        pos_shifted = pos.shift(1).fillna(0.0)
-        ret = prices.pct_change().fillna(0.0)
-        strat_ret = (pos_shifted * ret).astype(float)
-        strat_ret = strat_ret.dropna()
-
-        if len(strat_ret) < 30 or strat_ret.std() == 0:
-            return BacktestResult(
-                hypothesis=spec, sharpe=0.0, dsr=0.0, dsr_verdict="insufficient",
-                cpcv_mean_sharpe=0.0, cpcv_std_sharpe=0.0, max_drawdown=0.0,
-                n_trades=0, daily_returns=[],
-            )
-
-        # Sharpe
-        sharpe = float(strat_ret.mean() / strat_ret.std() * np.sqrt(252))
-
-        # Drawdown
-        equity = (1 + strat_ret).cumprod()
-        dd = float((equity / equity.cummax() - 1.0).min())
-
-        # Число сделок (смены позиции)
-        trades = int((pos_shifted.diff().abs() > 0).sum())
-
-        # DSR — считаем множественное тестирование внутри run
-        dsr_out = deflated_sharpe_ratio(
-            strat_ret.values,
-            n_trials=plan.n_hypotheses,
+    @staticmethod
+    def _dict_to_backtest_result(d: dict[str, Any]) -> BacktestResult:
+        """Конвертировать словарь из backtest_one в BacktestResult."""
+        spec = HypothesisSpec(
+            name=d.get("name", "?"),
+            family=d.get("family", "?"),
+            ticker=d.get("ticker", "?"),
+            params=d.get("params", {}),
+            fn=lambda x: x,  # не используется после конверсии
         )
-        # Уточняем verdict: borderline если 0.80 <= DSR <= 0.95
-        dsr_val = float(dsr_out["deflated_sharpe"])
-        if dsr_out["verdict"] == "significant":
-            verdict = "significant"
-        elif dsr_out["verdict"] == "insufficient_data":
-            verdict = "insufficient"
-        elif dsr_val >= 0.80:
-            verdict = "borderline"
-        else:
-            verdict = "not_significant"
-
-        # CPCV (лёгкая версия)
-        cpcv_mean, cpcv_std = self._cpcv_sharpe(strat_ret, plan)
-
         return BacktestResult(
             hypothesis=spec,
-            sharpe=sharpe,
-            dsr=dsr_val,
-            dsr_verdict=verdict,
-            cpcv_mean_sharpe=cpcv_mean,
-            cpcv_std_sharpe=cpcv_std,
-            max_drawdown=dd,
-            n_trades=trades,
-            daily_returns=strat_ret.tolist(),
+            sharpe=d.get("sharpe", 0),
+            dsr=d.get("dsr", 0),
+            dsr_verdict=d.get("dsr_verdict", "?"),
+            cpcv_mean_sharpe=d.get("cpcv_mean_sharpe", 0),
+            cpcv_std_sharpe=d.get("cpcv_std_sharpe", 0),
+            max_drawdown=d.get("max_drawdown", 0),
+            n_trades=d.get("n_trades", 0),
+            daily_returns=d.get("daily_returns", []),
         )
 
-    def _cpcv_sharpe(self, ret: pd.Series, plan: ResearchPlan) -> tuple[float, float]:
-        """Средний OOS Sharpe по CPCV путям (test-fold-only)."""
-        cfg = plan.validation
-        try:
-            cpcv = CombinatorialPurgedCV(
-                n_splits=int(cfg.get("cpcv_splits", 6)),
-                n_test_splits=int(cfg.get("cpcv_test_splits", 2)),
-                embargo_pct=float(cfg.get("embargo_pct", 0.01)),
-            )
-            sharpes = []
-            for train_idx, test_idx in cpcv.split(ret.index):
-                if len(test_idx) < 20:
-                    continue
-                s = ret.iloc[test_idx]
-                if s.std() == 0:
-                    continue
-                sharpes.append(float(s.mean() / s.std() * np.sqrt(252)))
-            if not sharpes:
-                return 0.0, 0.0
-            return float(np.mean(sharpes)), float(np.std(sharpes))
-        except Exception:
-            return 0.0, 0.0
-
-    def _portfolio_pbo(self, results: list[BacktestResult]) -> dict:
-        """PBO по матрице возвратов всех гипотез."""
-        good = [r for r in results if r.daily_returns]
-        if len(good) < 4:
-            return {"pbo": 0.0, "verdict": "insufficient"}
-        # Выравниваем длины
-        min_len = min(len(r.daily_returns) for r in good)
-        min_len = min(min_len, 500)
-        if min_len < 40:
-            return {"pbo": 0.0, "verdict": "insufficient"}
-        M = np.array([r.daily_returns[-min_len:] for r in good]).T
-        try:
-            out = probability_of_backtest_overfitting(M, n_partitions=8)
-            return {"pbo": float(out["pbo"]), "verdict": out.get("verdict", "")}
-        except Exception:
-            return {"pbo": 0.0, "verdict": "error"}
-
-    def _extract_insights(self, result: PipelineResult) -> list[str]:
-        """Детерминистичные наблюдения по результатам."""
-        insights = []
-        r = result
-        if not r.top:
-            return insights
-
-        # Лучшая гипотеза
-        best = r.top[0]
-        insights.append(
-            f"Лучшая гипотеза: {best.hypothesis.describe()}. "
-            f"Sharpe={best.sharpe:.2f}, DSR={best.dsr:.2f} ({best.dsr_verdict})."
-        )
-
-        # По семействам
-        by_family: dict[str, list[BacktestResult]] = {}
-        for res in r.top:
-            by_family.setdefault(res.hypothesis.family, []).append(res)
-        for fam, xs in by_family.items():
-            avg_dsr = np.mean([x.dsr for x in xs])
-            insights.append(
-                f"Семейство '{fam}' даёт средний DSR {avg_dsr:.2f} на топе "
-                f"({len(xs)} гипотез в топ-5)."
-            )
-
-        # PBO вердикт
-        if r.portfolio_pbo >= 0.5:
-            insights.append(
-                f"Внимание: PBO={r.portfolio_pbo:.2f} ({r.portfolio_pbo_verdict}) — "
-                f"портфель гипотез выглядит переобученным, лучшие Sharpe вероятно нестабильны."
-            )
-        elif r.portfolio_pbo >= 0.3:
-            insights.append(
-                f"PBO={r.portfolio_pbo:.2f} ({r.portfolio_pbo_verdict}) — "
-                f"переобучение на грани, перепроверь топ-1 на другом периоде."
-            )
-        else:
-            insights.append(
-                f"PBO={r.portfolio_pbo:.2f} ({r.portfolio_pbo_verdict}) — "
-                f"отбор в OOS выглядит устойчивым."
-            )
-
-        # Survival rate
-        if r.n_hypotheses_tested > 0:
-            rate = r.n_survived_dsr / r.n_hypotheses_tested
-            insights.append(
-                f"Выживаемость гипотез после Deflated Sharpe: "
-                f"{r.n_survived_dsr}/{r.n_hypotheses_tested} ({rate:.0%})."
-            )
-
-        return insights
 
     async def _emit(self, run_id: str, kind: str, stage: str,
                     message: str = "", data: dict | None = None):
@@ -388,3 +237,11 @@ class PipelineExecutor:
             run_id=run_id, kind=kind, stage=stage, message=message,
             data=data or {},
         ))
+        # Структурированный лог: kind → status, stage → tool
+        status = "ok" if kind != "error" else "error"
+        error_msg = message if status == "error" else None
+        from ..logging_config import log_tool_call
+        log_tool_call(
+            _logger, run_id=run_id, tool=stage, duration_ms=0.0,
+            status=status, error=error_msg, kind=kind,
+        )

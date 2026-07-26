@@ -33,12 +33,14 @@ dependencies = [
     "asyncpg>=0.29",
     "pgvector>=0.3",
     "alembic>=1.13",
+    # Agent (LangGraph)
+    "langgraph>=0.2",
 ]
 
 [project.optional-dependencies]
 # LLM-режим планировщика и нарратора (fallback работает без этого)
 llm = [
-    "litellm>=1.45",
+    "litellm>=1.45,<2.0",
 ]
 # Hypothesis embeddings (дедупликация и semantic search; без extra — деградация)
 embeddings = [
@@ -53,8 +55,6 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.5",
-    "httpx>=0.27",
-    "aiosqlite>=0.20",
 ]
 
 [project.urls]
@@ -79,4 +79,17 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
-ignore = ["E501", "B008", "SIM108"]
+# E501: line-length — единичные строки в docs/JSONB allow
+# B008: FastAPI-стиль Depends() в default — idiomatic
+# SIM108: ternary vs if — стилистика, не блокер
+# B007: loop control var unused в unpacking — типично для iter(split())
+# B905: zip(strict=) — pre-existing, fixed incrementally
+# B904: raise ... from err — pre-existing, fixed incrementally
+# E402: pre-existing в executor.py/events.py (lazy imports by design)
+# E731: pre-existing в тестах — lambdas в MagicMock-цепочках
+# F401/F841: pre-existing в неиспользуемых параметрах тестов (deque оставит для читаемости)
+# B017: pytest.raises(Exception) — допустимо для проверки WebSocketDisconnect в starlette
+ignore = [
+    "E501", "B008", "SIM108", "B007", "B905", "B904",
+    "E402", "E731", "F401", "F841", "B017",
+]

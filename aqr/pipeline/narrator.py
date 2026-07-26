@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
 
 from .executor import PipelineResult
-
 
 NARRATOR_SYSTEM = """Ты quant-исследователь, отчитывающийся коллеге о ночной проверке гипотез.
 Говори по-русски, кратко, по делу, без маркетинга. Пиши повествованием, а не таблицами.

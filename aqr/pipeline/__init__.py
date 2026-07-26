@@ -7,10 +7,10 @@
 - LLM опционален (fallback на детерминистский планировщик)
 - все шаги эмитят события в общую очередь для живой ленты
 """
-from .events import EventBus, Event
-from .planner import ChatPlanner, ResearchPlan
+from .events import Event, EventBus
 from .executor import PipelineExecutor, PipelineResult
 from .narrator import Narrator
+from .planner import ChatPlanner, ResearchPlan
 from .reviewer import InsightReviewer
 
 __all__ = [
