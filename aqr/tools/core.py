@@ -119,9 +119,7 @@ async def load_prices(
         adapter = TInvestAdapter()
 
         async def _fetch_one(t: str) -> tuple[str, pd.Series]:
-            df = await asyncio.to_thread(
-                adapter.candles, t, start_date, end_date, timeframe,
-            )
+            df = await adapter.candles(t, start_date, end_date, timeframe)
             if len(df) < MIN_CACHED_ROWS:
                 raise ValueError(f"мало данных ({len(df)} строк)")
             with contextlib.suppress(Exception):

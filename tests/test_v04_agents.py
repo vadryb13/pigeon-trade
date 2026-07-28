@@ -205,7 +205,7 @@ def mock_tinvest(monkeypatch):
         def __init__(self, *a, **kw):
             pass
 
-        def _resolve_figi(self, ticker):
+        async def _resolve_figi(self, ticker):
             return {"SBER": "BBG004730N88", "GAZP": "BBG004730RP0"}.get(ticker, "")
 
     monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)

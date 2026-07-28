@@ -3,9 +3,11 @@
 Вызывается в `lifespan` ДО `yield`. Бросает RuntimeError со списком
 недостающих env или упавших проверок — FastAPI не стартует пока всё не OK.
 
+.env файл загружается автоматически если `python-dotenv` установлен.
+
 Обязательные переменные окружения:
 - DATABASE_URL: postgres+asyncpg://...
-- AQR_SESSION_SECRET: ≥32 символов (мастер-ключ для HMAC WS-токенов
+- AQR_SESSION_SECRET: >=32 символов (мастер-ключ для HMAC WS-токенов
   и Fernet-шифрования per-session credentials)
 
 Опционально (auto-provision):
@@ -25,6 +27,16 @@ from pathlib import Path
 
 import sqlalchemy
 from sqlalchemy.ext.asyncio import create_async_engine
+
+# Автозагрузка .env
+try:
+    from dotenv import load_dotenv
+
+    _env_file = Path(__file__).resolve().parent.parent / ".env"
+    if _env_file.exists():
+        load_dotenv(_env_file, override=True)
+except ImportError:
+    pass
 
 _COMPOSE_PATH = Path(__file__).parent.parent / "aqr-compose.yml"
 _PG_READY_TIMEOUT = 30.0
@@ -112,16 +124,20 @@ async def validate_runtime() -> dict[str, str]:
 
     if not errors:
         db_url = os.environ["DATABASE_URL"]
-        # docker-команды — синхронные; гоняем в thread-pool, чтобы не
-        # блокировать event loop FastAPI lifespan (B7).
-        if await asyncio.to_thread(_docker_available):
-            ok, err = await asyncio.to_thread(_compose_up_postgres)
-            if not ok:
-                errors.append(err)
-
-        if not errors:
-            pg_ok, pg_err = await _wait_for_pg(db_url)
-            if not pg_ok:
+        # Пробуем подключиться к БД сразу. Если не получается — docker compose.
+        pg_ok, pg_err = await _wait_for_pg(db_url)
+        if not pg_ok:
+            if await asyncio.to_thread(_docker_available):
+                ok, err = await asyncio.to_thread(_compose_up_postgres)
+                if not ok:
+                    errors.append(
+                        f"Postgres unreachable and docker compose failed: {err}"
+                    )
+                else:
+                    pg_ok, pg_err = await _wait_for_pg(db_url)
+                    if not pg_ok:
+                        errors.append(pg_err)
+            else:
                 errors.append(pg_err)
 
     if errors:

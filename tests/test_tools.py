@@ -319,7 +319,7 @@ class TestLoadPrices:
             def __init__(self, *a, **kw):
                 pass
 
-            def candles(self, ticker, from_date, to_date, interval="D1"):
+            async def candles(self, ticker, from_date, to_date, interval="D1"):
                 rng = pd.date_range("2023-01-02", periods=500, freq="B")
                 px = [100 + i * 0.1 for i in range(500)]
                 return pd.DataFrame({
@@ -356,7 +356,7 @@ class TestLoadPrices:
             def __init__(self, *a, **kw):
                 pass
 
-            def candles(self, ticker, from_date, to_date, interval="D1"):
+            async def candles(self, ticker, from_date, to_date, interval="D1"):
                 rng = pd.date_range("2023-01-02", periods=500, freq="B")
                 px = [100.0] * 500
                 return pd.DataFrame({

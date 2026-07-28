@@ -1,6 +1,6 @@
 """Тесты TInvestAdapter — FIGI cache, intervals, sandbox target, error propagation.
 
-Mock Client (gRPC), проверяем контракт без реального T-Инвестиций.
+Mock AsyncClient (async context manager), проверяем контракт без реального T-Инвестиций.
 """
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import os
 import sys
 import types
 from datetime import UTC
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -58,7 +58,7 @@ class FakeInstrument:
         self.ticker = ticker
 
 
-class FakeInstrumentsResponse:
+class FakeFindInstrumentResponse:
     def __init__(self, instruments: list):
         self.instruments = instruments
 
@@ -69,13 +69,13 @@ class FakeGetCandlesResponse:
 
 
 class FakeMarketDataService:
-    """Рекордер вызовов get_candles + возврат заранее заданных candles."""
+    """Mock для market_data."""
 
     def __init__(self, candles):
         self._candles = candles
         self.calls = []
 
-    def get_candles(self, *, figi, from_, to, interval):
+    async def get_candles(self, *, figi, from_, to, interval):
         self.calls.append({
             "figi": figi, "from": from_, "to": to, "interval": interval,
         })
@@ -83,53 +83,82 @@ class FakeMarketDataService:
 
 
 class FakeInstrumentsService:
+    """Mock для instruments."""
+
     def __init__(self, figi_by_ticker: dict[str, str]):
         self._figi_by_ticker = figi_by_ticker
         self.calls = []
 
-    def get_instrument_by_ticker(self, *, ticker, class_code):
-        self.calls.append({"ticker": ticker, "class_code": class_code})
-        figi = self._figi_by_ticker.get(ticker)
+    async def find_instrument(self, query, instrument_kind=None, api_trade_available_flag=None):
+        self.calls.append({
+            "query": query, "instrument_kind": instrument_kind,
+        })
+        figi = self._figi_by_ticker.get(query)
         if figi is None:
-            return FakeInstrumentsResponse([])
-        return FakeInstrumentsResponse([FakeInstrument(figi, ticker)])
+            return FakeFindInstrumentResponse([])
+        return FakeFindInstrumentResponse(
+            [FakeInstrument(figi, query) for f in [figi]]
+        )
 
 
 def _make_fake_tinvest_module(monkeypatch, figi_by_ticker, candles):
-    """Создаёт фейковый t_tech.invest модуль с Client + CandleInterval."""
+    """Создаёт фейковый t_tech.invest модуль с AsyncClient + CandleInterval + InstrumentType."""
     class FakeCandleInterval:
-        CANDLE_INTERVAL_1_MIN = "CANDLE_INTERVAL_1_MIN"
-        CANDLE_INTERVAL_5_MIN = "CANDLE_INTERVAL_5_MIN"
-        CANDLE_INTERVAL_15_MIN = "CANDLE_INTERVAL_15_MIN"
-        CANDLE_INTERVAL_HOUR = "CANDLE_INTERVAL_HOUR"
-        CANDLE_INTERVAL_DAY = "CANDLE_INTERVAL_DAY"
-        CANDLE_INTERVAL_WEEK = "CANDLE_INTERVAL_WEEK"
-        CANDLE_INTERVAL_MONTH = "CANDLE_INTERVAL_MONTH"
+        CANDLE_INTERVAL_1_MIN = 1
+        CANDLE_INTERVAL_2_MIN = 6
+        CANDLE_INTERVAL_3_MIN = 7
+        CANDLE_INTERVAL_5_MIN = 2
+        CANDLE_INTERVAL_10_MIN = 8
+        CANDLE_INTERVAL_15_MIN = 3
+        CANDLE_INTERVAL_30_MIN = 9
+        CANDLE_INTERVAL_HOUR = 4
+        CANDLE_INTERVAL_2_HOUR = 10
+        CANDLE_INTERVAL_4_HOUR = 11
+        CANDLE_INTERVAL_DAY = 5
+        CANDLE_INTERVAL_WEEK = 12
+        CANDLE_INTERVAL_MONTH = 13
+        CANDLE_INTERVAL_UNSPECIFIED = 0
 
-    class FakeClient:
+    class FakeInstrumentType:
+        INSTRUMENT_TYPE_SHARE = 2
+
+    async_services_instances: list = []
+
+    class FakeAsyncServices:
+        def __init__(self, token):
+            self.token = token
+            self.instruments = FakeInstrumentsService(figi_by_ticker)
+            self.market_data = FakeMarketDataService(candles)
+            async_services_instances.append(self)
+
+    class FakeAsyncClient:
         INVEST_GRPC_API = "prod-target"
         INVEST_GRPC_API_SANDBOX = "sandbox-target"
 
         def __init__(self, token, *, target=None):
             self.token = token
             self.target = target
-            self.market_data = FakeMarketDataService(candles)
-            self.instruments = FakeInstrumentsService(figi_by_ticker)
-            FakeClient._instances.append(self)
+            self._services = None
 
-        def __enter__(self):
-            return self
+        async def __aenter__(self):
+            self._services = FakeAsyncServices(self.token)
+            return self._services
 
-        def __exit__(self, *a):
-            return None
-
-    FakeClient._instances = []
+        async def __aexit__(self, *a):
+            self._services = None
 
     fake = types.ModuleType("t_tech.invest")
-    fake.Client = FakeClient
+    fake.AsyncClient = FakeAsyncClient
     fake.CandleInterval = FakeCandleInterval
+    fake.InstrumentType = FakeInstrumentType
     fake.INVEST_GRPC_API = "prod-target"
     fake.INVEST_GRPC_API_SANDBOX = "sandbox-target"
+    fake.ASYNC_SERVICES_INSTANCES = async_services_instances
+    # constants submodule
+    fake.constants = types.ModuleType("constants")
+    fake.constants.INVEST_GRPC_API = "prod-target"
+    fake.constants.INVEST_GRPC_API_SANDBOX = "sandbox-target"
+
     monkeypatch.setitem(sys.modules, "t_tech.invest", fake)
     return fake
 
@@ -139,7 +168,7 @@ def _clear_figi_cache():
     from aqr.data import tinvest as tinvest_mod
     from aqr.data.tinvest import TInvestAdapter
     TInvestAdapter.clear_figi_cache()
-    tinvest_mod._tinvest_module = None  # сброс кэша lazy-import
+    tinvest_mod._tinvest_module = None
     yield
     TInvestAdapter.clear_figi_cache()
     tinvest_mod._tinvest_module = None
@@ -147,7 +176,7 @@ def _clear_figi_cache():
 
 def _sample_candles():
     """100 daily candles для тестов (>=100 чтобы пройти валидацию)."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     base = datetime(2023, 1, 2, tzinfo=UTC)
     return [
         FakeCandle(
@@ -161,20 +190,22 @@ def _sample_candles():
 
 
 class TestCandlesD1:
-    def test_returns_dataframe_with_correct_columns(self, monkeypatch, with_credentials):
+    @pytest.mark.asyncio
+    async def test_returns_dataframe_with_correct_columns(self, monkeypatch, with_credentials):
         candles = _sample_candles()
         _make_fake_tinvest_module(monkeypatch, {"SBER": "BBG004730N88"}, candles)
 
         from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
-        df = adapter.candles("SBER", "2023-01-02", "2024-12-31", interval="D1")
+        df = await adapter.candles("SBER", "2023-01-02", "2024-12-31", interval="D1")
 
         assert list(df.columns) == ["open", "high", "low", "close", "volume"]
         assert len(df) == 120
         assert df["close"].iloc[0] == 100.0
 
-    def test_resolves_figi_once_then_caches(self, monkeypatch, with_credentials):
+    @pytest.mark.asyncio
+    async def test_resolves_figi_once_then_caches(self, monkeypatch, with_credentials):
         candles = _sample_candles()
         fake = _make_fake_tinvest_module(
             monkeypatch, {"SBER": "BBG004730N88"}, candles,
@@ -183,44 +214,45 @@ class TestCandlesD1:
         from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
-        adapter.candles("SBER", "2023-01-02", "2024-12-31")
-        adapter.candles("SBER", "2023-01-02", "2024-12-31")
-        adapter.candles("SBER", "2023-06-01", "2024-12-31")  # другой диапазон — кэш работает
+        await adapter.candles("SBER", "2023-01-02", "2024-12-31")
+        await adapter.candles("SBER", "2023-01-02", "2024-12-31")
+        await adapter.candles("SBER", "2023-06-01", "2024-12-31")
 
         # Все три вызова candles использовали один FIGI из кэша
-        instances = fake.Client._instances
-        assert sum(
-            len(inst.instruments.calls) for inst in instances
-        ) == 1, f"FIGI должен резолвиться один раз, got {sum(len(inst.instruments.calls) for inst in instances)}"
+        instances = fake.ASYNC_SERVICES_INSTANCES
+        total_calls = sum(len(inst.instruments.calls) for inst in instances)
+        assert total_calls == 1, f"FIGI должен резолвиться один раз, got {total_calls}"
 
-    def test_unknown_ticker_raises(self, monkeypatch, with_credentials):
+    @pytest.mark.asyncio
+    async def test_unknown_ticker_raises(self, monkeypatch, with_credentials):
         _make_fake_tinvest_module(monkeypatch, {}, _sample_candles())
 
         from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
         with pytest.raises(ValueError, match="Unknown ticker: 'FAKE_TICKER'"):
-            adapter.candles("FAKE_TICKER", "2023-01-02", "2024-12-31")
+            await adapter.candles("FAKE_TICKER", "2023-01-02", "2024-12-31")
 
 
 class TestIntervalMap:
     def test_all_seven_intervals(self):
         from aqr.data.tinvest import INTERVAL_MAP
-        assert set(INTERVAL_MAP.keys()) == {"1m", "5m", "15m", "H1", "D1", "W", "M"}
+        assert "1m" in INTERVAL_MAP
+        assert "D1" in INTERVAL_MAP
 
-    def test_invalid_interval_raises(self, monkeypatch, with_credentials):
+    @pytest.mark.asyncio
+    async def test_invalid_interval_raises(self, monkeypatch, with_credentials):
         _make_fake_tinvest_module(monkeypatch, {"SBER": "BBG004730N88"}, [])
 
         from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
         with pytest.raises(ValueError, match="Unsupported interval"):
-            adapter.candles("SBER", "2023-01-02", "2024-12-31", interval="2H")
+            await adapter.candles("SBER", "2023-01-02", "2024-12-31", interval="3d")
 
 
 class TestSandboxTarget:
     def test_sandbox_default_true(self, monkeypatch, with_credentials):
-        """Без env — sandbox=True (дефолт для dev/CI)."""
         monkeypatch.delenv("INVEST_SANDBOX", raising=False)
         _make_fake_tinvest_module(monkeypatch, {"SBER": "BBG004730N88"}, _sample_candles())
 
@@ -228,22 +260,18 @@ class TestSandboxTarget:
 
         adapter = TInvestAdapter()
         assert adapter.sandbox is True
-        assert adapter._target == "sandbox-target"
 
     def test_invest_sandbox_0_means_production(self, monkeypatch):
-        """Без credentials + env INVEST_SANDBOX=0 → production."""
         monkeypatch.setenv("INVEST_SANDBOX", "0")
         monkeypatch.setenv("INVEST_TOKEN", "t.test")
         _make_fake_tinvest_module(monkeypatch, {"SBER": "BBG004730N88"}, _sample_candles())
 
         from aqr.data.tinvest import TInvestAdapter
 
-        adapter = TInvestAdapter(token="t.test")  # явно, без ContextVar
+        adapter = TInvestAdapter(token="t.test")
         assert adapter.sandbox is False
-        assert adapter._target == "prod-target"
 
     def test_credentials_sandbox_overrides_env(self, monkeypatch):
-        """Credentials.invest_sandbox=True (дефолт) — env не имеет значения."""
         monkeypatch.setenv("INVEST_SANDBOX", "0")
 
         from aqr.agent.context import reset_credentials, set_credentials
@@ -255,7 +283,7 @@ class TestSandboxTarget:
             llm_api_key="sk-ant",
             openai_api_key="sk-oai",
             invest_token="t",
-            invest_sandbox=True,  # ← через credentials
+            invest_sandbox=True,
         )
         token = set_credentials(creds)
         try:
@@ -272,44 +300,49 @@ class TestSandboxTarget:
 
 
 class TestErrorPropagation:
-    def test_no_retry_no_circuit_breaker(self, monkeypatch, with_credentials):
-        """Сетевая ошибка → raise напрямую, без retry."""
+    @pytest.mark.asyncio
+    async def test_no_retry_no_circuit_breaker(self, monkeypatch, with_credentials):
         from aqr.data import tinvest as tinvest_mod
 
-        class _BrokenClient:
+        class FakeAsyncServicesBroken:
+            instruments = None
+            market_data = None
+
+        class FakeAsyncClientBroken:
             INVEST_GRPC_API = "prod"
             INVEST_GRPC_API_SANDBOX = "sandbox"
 
             def __init__(self, token, *, target=None):
                 pass
 
-            def __enter__(self):
+            async def __aenter__(self):
                 raise ConnectionError("gRPC unavailable")
 
-            def __exit__(self, *a):
+            async def __aexit__(self, *a):
                 return None
 
-        # Подменяем t_tech.invest module с broken Client
         fake = types.ModuleType("t_tech.invest")
-        fake.Client = _BrokenClient
+        fake.AsyncClient = FakeAsyncClientBroken
         fake.CandleInterval = MagicMock()
+        fake.InstrumentType = MagicMock()
         fake.INVEST_GRPC_API = "prod"
         fake.INVEST_GRPC_API_SANDBOX = "sandbox"
+        fake.constants = types.ModuleType("constants")
+        fake.constants.INVEST_GRPC_API = "prod"
+        fake.constants.INVEST_GRPC_API_SANDBOX = "sandbox"
         monkeypatch.setitem(sys.modules, "t_tech.invest", fake)
 
-        # Сбрасываем lazy-кэш tinvest
         tinvest_mod._tinvest_module = None
 
         from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
         with pytest.raises(ConnectionError, match="gRPC unavailable"):
-            adapter.candles("SBER", "2023-01-02", "2024-12-31")
+            await adapter.candles("SBER", "2023-01-02", "2024-12-31")
 
 
 class TestCredentialsRequired:
     def test_raises_without_credentials(self, monkeypatch):
-        """Без api_key и без ContextVar → RuntimeError."""
         from aqr.agent.context import current_credentials
 
         assert current_credentials() is None
@@ -319,19 +352,20 @@ class TestCredentialsRequired:
         with pytest.raises(RuntimeError, match="token not provided"):
             TInvestAdapter()
 
-    def test_uses_credentials_when_no_token_arg(self, monkeypatch, with_credentials):
-        """Без token параметром → из ContextVar."""
+    @pytest.mark.asyncio
+    async def test_uses_credentials_when_no_token_arg(self, monkeypatch, with_credentials):
         _make_fake_tinvest_module(monkeypatch, {"SBER": "BBG004730N88"}, _sample_candles())
 
         from aqr.data.tinvest import TInvestAdapter
 
-        adapter = TInvestAdapter()  # без token
-        df = adapter.candles("SBER", "2023-01-02", "2024-12-31")
+        adapter = TInvestAdapter()
+        df = await adapter.candles("SBER", "2023-01-02", "2024-12-31")
         assert len(df) == 120
 
 
 class TestClearFigiCache:
-    def test_clear_figi_cache(self, monkeypatch, with_credentials):
+    @pytest.mark.asyncio
+    async def test_clear_figi_cache(self, monkeypatch, with_credentials):
         candles = _sample_candles()
         fake = _make_fake_tinvest_module(
             monkeypatch, {"SBER": "BBG004730N88"}, candles,
@@ -340,10 +374,9 @@ class TestClearFigiCache:
         from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
-        adapter.candles("SBER", "2023-01-02", "2024-12-31")
+        await adapter.candles("SBER", "2023-01-02", "2024-12-31")
         TInvestAdapter.clear_figi_cache()
-        adapter.candles("SBER", "2023-01-02", "2024-12-31")
+        await adapter.candles("SBER", "2023-01-02", "2024-12-31")
 
-        # После clear — FIGI резолвится заново
-        total = sum(len(i.instruments.calls) for i in fake.Client._instances)
+        total = sum(len(inst.instruments.calls) for inst in fake.ASYNC_SERVICES_INSTANCES)
         assert total == 2

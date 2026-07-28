@@ -128,7 +128,7 @@ class Hypothesis(Base):
     family: Mapped[str] = mapped_column(String(64), nullable=False)
     ticker: Mapped[str] = mapped_column(String(32), nullable=False)
     config_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(768), nullable=True)
     dsr: Mapped[float | None] = mapped_column(Float, nullable=True)
     pbo: Mapped[float | None] = mapped_column(Float, nullable=True)
     cpcv: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -97,7 +97,7 @@ class BrowserAgent(BaseAgent):
             info: dict[str, dict] = {}
             for t in tickers:
                 try:
-                    figi = adapter._resolve_figi(t)
+                    figi = await adapter._resolve_figi(t)
                     info[t] = {"figi": figi, "ticker": t}
                 except ValueError:
                     info[t] = {"figi": "", "ticker": t, "error": "not found"}

@@ -49,11 +49,12 @@ def _require_vectorbt():
 
 def screen_momentum(
     ticker: str,
-    start_date: str,
-    end_date: str,
-    fast_range: tuple[int, int, int] = (3, 30, 1),
+    start_date: str = "2023-01-01",
+    end_date: str = "2024-12-31",
+    fast_range: tuple[int, int, int] = (5, 50, 5),
     slow_range: tuple[int, int, int] = (20, 120, 5),
     top_n: int = 10,
+    candles: pd.DataFrame | None = None,  # optional pre-loaded prices
 ) -> list[dict]:
     """Grid-search SMA-crossover momentum на тикере.
 
@@ -63,19 +64,24 @@ def screen_momentum(
         fast_range: (start, stop, step) для fast SMA window
         slow_range: (start, stop, step) для slow SMA window
         top_n: сколько лучших вариантов вернуть (sorted by Sharpe desc)
+        candles: предзагруженные OHLCV (если None — загружаем через T-Invest)
 
     Returns:
         list[dict] — каждый элемент asdict(VariantResult) + ticker
         (для удобства передачи в PipelineResult).
     """
-    from aqr.data.tinvest import TInvestAdapter
-
     vbt = _require_vectorbt()
     import numpy as np
 
-    # 1. Load prices через существующий TInvestAdapter (lazy FIGI lookup)
-    adapter = TInvestAdapter()
-    candles = adapter.candles(ticker, start_date, end_date, interval="D1")
+    # 1. Load prices — если не переданы, идём в T-Invest
+    if candles is None:
+        from aqr.data.tinvest import TInvestAdapter
+        import asyncio
+
+        adapter = TInvestAdapter()
+        candles = asyncio.run(
+            adapter.candles(ticker, start_date, end_date, interval="D1")
+        )
     close = candles["close"]
 
     # 2. Build parameter grid (filter: slow > fast + 5 to avoid noise)

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 
+import pandas as pd
 import pytest
 
 # Skip весь файл если vectorbt не установлен
@@ -36,33 +37,21 @@ class TestVectorBTScreener:
         assert callable(screen_momentum)
         assert VariantResult is not None
 
-    def test_screen_momentum_returns_sorted_results(self, monkeypatch, synthetic_prices):
+    def test_screen_momentum_returns_sorted_results(self, synthetic_prices):
         """screen_momentum возвращает список отсортированный по Sharpe desc."""
-        # Mock TInvestAdapter.candles чтобы не ходить в T-Invest
-        from aqr.data import tinvest as tinvest_mod
         from aqr.screener import screen_momentum
 
-        class _FakeAdapter:
-            def __init__(self, *a, **kw):
-                pass
-
-            def candles(self, ticker, from_date, to_date, interval="D1"):
-                import pandas as pd
-                return pd.DataFrame(
-                    {"close": synthetic_prices, "open": synthetic_prices,
-                     "high": synthetic_prices, "low": synthetic_prices,
-                     "volume": [0] * len(synthetic_prices)},
-                    index=synthetic_prices.index,
-                )
-
-        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
-
-        # С маленьким grid для скорости
         result = screen_momentum(
             "SBER", "2023-01-02", "2024-12-30",
             fast_range=(5, 15, 5),  # 2 варианта
             slow_range=(20, 50, 10),  # 3 варианта
             top_n=5,
+            candles=pd.DataFrame(
+                {"close": synthetic_prices, "open": synthetic_prices,
+                 "high": synthetic_prices, "low": synthetic_prices,
+                 "volume": [0] * len(synthetic_prices)},
+                index=synthetic_prices.index,
+            ),
         )
 
         assert isinstance(result, list)
@@ -80,46 +69,29 @@ class TestVectorBTScreener:
         assert sharpes == sorted(sharpes, reverse=True), \
             f"Results not sorted: {sharpes}"
 
-    def test_top_n_limit_respected(self, monkeypatch, synthetic_prices):
+    def test_top_n_limit_respected(self, synthetic_prices):
         """top_n действительно ограничивает размер выдачи."""
-        from aqr.data import tinvest as tinvest_mod
         from aqr.screener import screen_momentum
 
-        class _FakeAdapter:
-            def __init__(self, *a, **kw): pass
-            def candles(self, *a, **kw):
-                import pandas as pd
-                return pd.DataFrame({"close": synthetic_prices}, index=synthetic_prices.index)
-
-        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
-
-        # Grid: 5 fast × 5 slow = 25 combos, top_n=3
         result = screen_momentum(
             "SBER", "2023-01-02", "2024-12-30",
             fast_range=(5, 30, 5),  # 5
             slow_range=(20, 80, 15),  # 5
             top_n=3,
+            candles=pd.DataFrame({"close": synthetic_prices}, index=synthetic_prices.index),
         )
         assert len(result) == 3
 
-    def test_fast_less_than_slow_constraint(self, monkeypatch, synthetic_prices):
+    def test_fast_less_than_slow_constraint(self, synthetic_prices):
         """Constraint: fast + 5 < slow (отсекает бессмысленные)."""
-        from aqr.data import tinvest as tinvest_mod
         from aqr.screener import screen_momentum
-
-        class _FakeAdapter:
-            def __init__(self, *a, **kw): pass
-            def candles(self, *a, **kw):
-                import pandas as pd
-                return pd.DataFrame({"close": synthetic_prices}, index=synthetic_prices.index)
-
-        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
 
         result = screen_momentum(
             "SBER", "2023-01-02", "2024-12-30",
             fast_range=(3, 20, 1),  # 17 fast values
             slow_range=(20, 100, 5),  # 16 slow values
             top_n=100,
+            candles=pd.DataFrame({"close": synthetic_prices}, index=synthetic_prices.index),
         )
         for r in result:
             assert r["slow"] > r["fast"] + 5, \
@@ -139,20 +111,11 @@ class TestVectorBTScreener:
         with pytest.raises(RuntimeError, match="credentials"):
             screen_momentum("SBER", "2023-01-02", "2024-12-30")
 
-    def test_works_with_context_credentials(self, monkeypatch, synthetic_prices):
+    def test_works_with_context_credentials(self, synthetic_prices):
         """Credentials в ContextVar → screen_momentum работает."""
         from aqr.agent.context import reset_credentials, set_credentials
-        from aqr.data import tinvest as tinvest_mod
         from aqr.registry import DecryptedSettings
         from aqr.screener import screen_momentum
-
-        class _FakeAdapter:
-            def __init__(self, *a, **kw): pass
-            def candles(self, *a, **kw):
-                import pandas as pd
-                return pd.DataFrame({"close": synthetic_prices}, index=synthetic_prices.index)
-
-        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
 
         creds = DecryptedSettings(
             session_id="alice",
@@ -167,6 +130,7 @@ class TestVectorBTScreener:
             result = screen_momentum(
                 "SBER", "2023-01-02", "2024-12-30",
                 fast_range=(5, 10, 5), slow_range=(20, 30, 10), top_n=2,
+                candles=pd.DataFrame({"close": synthetic_prices}, index=synthetic_prices.index),
             )
             assert len(result) >= 1
         finally:

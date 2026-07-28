@@ -7,28 +7,26 @@ Lazy import `t_tech.invest` чтобы aqr.main стартовал без под
 Строгий режим: одна попытка на запрос, без retry/circuit-breaker.
 На любую ошибку (сеть, таймаут, неизвестный FIGI) — raise.
 
-Per-session credentials (token + sandbox) берутся из ContextVar.
+Per-session credentials (token + sandbox) берутся из ContextVar или env.
 
-Concurrency: `_resolve_figi` защищён `threading.Lock` — load_prices
-гоняет несколько `adapter.candles(...)` через `asyncio.to_thread` → они
-выполняются параллельно в ThreadPoolExecutor и без лока race-ят на
-class-level `_figi_cache` (B5). В CPython dict.get/set атомарны на уровне
-GIL, но между get-проверкой и set может вклиниться другой поток, и
-тогда оба сходят в gRPC InstrumentsService.
+Новый SDK (1.0.0+): `AsyncClient` как async context manager,
+`find_instrument` с фильтром по `instrument_kind` для поиска FIGI,
+`get_candles` для получения свечей.
+
+SSL: `SSL_TBANK_VERIFY=true` использует сертификат МинЦифры
+из пакета `t_tech.invest.certs`.
 """
 from __future__ import annotations
 
 import os
 import sys
-import threading
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 import pandas as pd
 
 if TYPE_CHECKING:
-    from t_tech.invest import CandleInterval, Client
-
+    from t_tech.invest import AsyncClient, CandleInterval, InstrumentType
 
 # Lazy import для тестов и для отделения import-time от runtime
 _tinvest_module = None
@@ -37,14 +35,15 @@ _tinvest_module = None
 def _get_tinvest():
     """Lazy import t_tech.invest. На ошибке ImportError — RuntimeError.
 
-    Также проверяем sys.modules — позволяет тестам подменять
-    `t_tech.invest` через `monkeypatch.setitem(sys.modules, ...)`.
+    Проверяет `sys.modules` перед импортом — позволяет тестам подменять
+    t_tech.invest через monkeypatch.setitem(sys.modules, "t_tech.invest", fake).
     """
     global _tinvest_module
     if _tinvest_module is not None:
         return _tinvest_module
 
-    # Тестовая подмена через sys.modules — избегаем реального import
+    # Тестовая подмена через sys.modules — проверяем ДО реального import,
+    # чтобы тестовый fake перекрывал реальный пакет.
     ti = sys.modules.get("t_tech.invest")
     if ti is not None:
         _tinvest_module = ti
@@ -72,20 +71,27 @@ INTERVAL_MAP: dict[str, str] = {
     "W": "CANDLE_INTERVAL_WEEK",
     "M": "CANDLE_INTERVAL_MONTH",
 }
+# Производные интервалы (новый SDK)
+_EXTRA_INTERVAL_MAP: dict[str, str] = {
+    "2m": "CANDLE_INTERVAL_2_MIN",
+    "3m": "CANDLE_INTERVAL_3_MIN",
+    "10m": "CANDLE_INTERVAL_10_MIN",
+    "30m": "CANDLE_INTERVAL_30_MIN",
+    "2H": "CANDLE_INTERVAL_2_HOUR",
+    "4H": "CANDLE_INTERVAL_4_HOUR",
+}
+INTERVAL_MAP.update(_EXTRA_INTERVAL_MAP)
 
 
 class TInvestAdapter:
-    """Обёртка над t_tech.invest.Client: candles + FIGI-resolution.
+    """Обёртка над t_tech.invest.AsyncClient: candles + FIGI-resolution.
 
-    INTERVAL_MAP — 7 валидных интервалов через T-Invest CandleInterval.
-    Любой другой ключ → ValueError (см. AGENTS.md gotcha).
+    INTERVAL_MAP — все валидные интервалы через T-Invest CandleInterval.
+    Любой другой ключ → KeyError (см. AGENTS.md gotcha).
     """
 
     # Class-level cache для ticker → FIGI. Сбрасывается через clear_figi_cache.
     _figi_cache: dict[str, str] = {}
-    # threading.Lock защищает _figi_cache от concurrent writers из
-    # asyncio.to_thread-пула (B5). Class-level — все инстансы делят один лок.
-    _figi_lock: threading.Lock = threading.Lock()
 
     def __init__(
         self,
@@ -97,28 +103,39 @@ class TInvestAdapter:
             from aqr.agent.context import current_credentials
 
             creds = current_credentials()
-            if creds is None:
+            if creds is not None:
+                token = creds.invest_token
+                sandbox = creds.invest_sandbox
+            # Fallback: env
+            if token is None:
+                token = os.getenv("INVEST_TOKEN")
+            if token is None:
                 raise RuntimeError(
                     "TInvestAdapter: token not provided and no session "
-                    "credentials in context. Configure via /chat/{token}/settings."
+                    "credentials in context. Configure via /chat/{token}/settings "
+                    "or set INVEST_TOKEN env var."
                 )
-            token = creds.invest_token
-            sandbox = creds.invest_sandbox
 
         # Sandbox по дефолту для dev/CI
         if sandbox is None:
             sandbox = os.getenv("INVEST_SANDBOX", "1") != "0"
 
-        ti = _get_tinvest()
         self.token = token
         self.sandbox = sandbox
-        self._target = (
-            ti.INVEST_GRPC_API_SANDBOX if sandbox else ti.INVEST_GRPC_API
-        )
-        self._Client = ti.Client
-        self._CandleInterval = ti.CandleInterval
 
-    def candles(
+        # Для market data используем production endpoint
+        # (sandbox endpoint не отдаёт свечи, но песочные токены
+        # работают и с production target для данных)
+        ti = _get_tinvest()
+        self._target = os.getenv("INVEST_GRPC_API") or ti.constants.INVEST_GRPC_API
+
+    def _build_async_client(self) -> "AsyncClient":
+        """Создать AsyncClient на основе переданного token и target."""
+        from t_tech.invest import AsyncClient
+
+        return AsyncClient(token=self.token, target=self._target)
+
+    async def candles(
         self,
         ticker: str,
         from_date: str,
@@ -136,13 +153,13 @@ class TInvestAdapter:
                 f"Valid: {sorted(INTERVAL_MAP.keys())}"
             )
 
-        figi = self._resolve_figi(ticker)
-        interval_enum = getattr(
-            self._CandleInterval, INTERVAL_MAP[interval]
-        )
+        from t_tech.invest import CandleInterval
 
-        with self._Client(self.token, target=self._target) as client:
-            response = client.market_data.get_candles(
+        figi = await self._resolve_figi(ticker)
+        interval_enum = getattr(CandleInterval, INTERVAL_MAP[interval])
+
+        async with self._build_async_client() as client:
+            response = await client.market_data.get_candles(
                 figi=figi,
                 from_=_parse_dt(from_date),
                 to=_parse_dt(to_date),
@@ -151,34 +168,32 @@ class TInvestAdapter:
 
         return _candles_to_dataframe(response.candles)
 
-    def _resolve_figi(self, ticker: str) -> str:
+    async def _resolve_figi(self, ticker: str) -> str:
         """Lazy lookup ticker → FIGI через InstrumentsService.
 
-        Результат кэшируется в class-level dict. Неизвестный тикер → ValueError.
-        Защищён `threading.Lock` от concurrent writers (B5): asyncio.to_thread
-        разносит sync-вызовы по ThreadPoolExecutor, и без лока оба потока
-        могут одновременно сходить в InstrumentsService.
+        Результат кэшируется в class-level dict.
+        Неизвестный тикер → ValueError.
+        При нескольких FIGI (акция в разных режимах) выбираем
+        Bloomberg FIGI (начинается с BBG) — основной для market data.
         """
-        # Fast-path: cache hit без лока (dict.get — атомарный в CPython).
         cached = TInvestAdapter._figi_cache.get(ticker)
         if cached is not None:
             return cached
 
-        with TInvestAdapter._figi_lock:
-            # Double-check под локом — другой поток мог уже заполнить.
-            cached = TInvestAdapter._figi_cache.get(ticker)
-            if cached is not None:
-                return cached
-            with self._Client(self.token, target=self._target) as client:
-                r = client.instruments.get_instrument_by_ticker(
-                    ticker=ticker,
-                    class_code="TQBR",
-                )
-            instruments = list(r.instruments)
+        from t_tech.invest import InstrumentType
+
+        async with self._build_async_client() as client:
+            result = await client.instruments.find_instrument(
+                query=ticker,
+                instrument_kind=InstrumentType.INSTRUMENT_TYPE_SHARE,
+            )
+            instruments = [i for i in result.instruments if i.ticker == ticker]
             if not instruments:
                 raise ValueError(f"Unknown ticker: {ticker!r}")
-            TInvestAdapter._figi_cache[ticker] = instruments[0].figi
-            return TInvestAdapter._figi_cache[ticker]
+            # Предпочитаем Bloomberg FIGI (BBG...) — основной для market data
+            figi = next((i.figi for i in instruments if i.figi.startswith("BBG")), instruments[0].figi)
+            TInvestAdapter._figi_cache[ticker] = figi
+            return figi
 
     @classmethod
     def clear_figi_cache(cls) -> None:
@@ -197,7 +212,6 @@ def _quotation_to_float(q) -> float:
     """t_tech.invest возвращает цены как Quotation (units + nano).
     Конвертируем в float для pandas.
     """
-    # Quotation.units — целая часть, Quotation.nano — дробная (10^-9)
     units = getattr(q, "units", 0)
     nano = getattr(q, "nano", 0)
     return float(units) + float(nano) / 1e9

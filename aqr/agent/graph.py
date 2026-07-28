@@ -411,7 +411,7 @@ async def _llm_route(state: AgentState) -> str:
 
 def _has_llm_key() -> bool:
     """Check if any LLM credentials are available (env or per-session ContextVar)."""
-    keys = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIGACHAT_CREDENTIALS")
+    keys = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIGACHAT_CREDENTIALS", "DEEPSEEK_API_KEY")
     if any(os.environ.get(k) for k in keys):
         return True
     try:

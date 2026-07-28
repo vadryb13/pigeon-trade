@@ -99,7 +99,7 @@ class MCPHandler:
         from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
-        df = adapter.candles(ticker, from_date, to_date, interval)
+        df = await adapter.candles(ticker, from_date, to_date, interval)
         return {
             col: df[col].tolist()
             for col in ["open", "high", "low", "close", "volume"]
@@ -110,7 +110,7 @@ class MCPHandler:
         from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
-        return adapter._resolve_figi(ticker)
+        return await adapter._resolve_figi(ticker)
 
     async def _search_similar(
         self,
