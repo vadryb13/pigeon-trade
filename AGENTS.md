@@ -1,428 +1,154 @@
 # AGENTS.md
 
-Контракт для LLM-агентов (Claude Code, Codex, Cursor), работающих с этим репозиторием.
+Контракт для LLM-агентов, работающих с этим репозиторием.
 
-## Что это за проект
+## Проект
 
-AQR — тонкий пайплайн для проверки торговых гипотез на MOEX через T-Invest API. Вход — цель на русском («проверь momentum на голубых фишках»), выход — топ-5 гипотез с Deflated Sharpe / CPCV / PBO + нарратив.
+AQR — пайплайн для проверки торговых гипотез на MOEX через T-Invest API. Вход — цель на русском, выход — топ-5 гипотез с Deflated Sharpe / CPCV / PBO + нарратив.
 
-**Строгий режим:** проект работает только при наличии всех зависимостей. Никаких fallback-путей. На старте валидируется наличие LLM, Postgres и Invest-токена; без них FastAPI не запускается.
+Строгий режим: любая ошибка → raise, без fallback к шаблону или синтетическим данным.
 
-Трёхслойная архитектура:
-
-- **Storage** — Postgres + pgvector + Alembic (`aqr/registry/`, `aqr/db.py`). Таблицы `sessions → runs → hypotheses` + `chat_messages` для истории WebSocket.
-- **Tool Layer** — `aqr/tools/`: `ToolSpec` + `ToolRegistry` + **13 инструментов** (`plan_research`, `load_prices`, `generate_hypotheses`, `backtest_one`, `validate_portfolio`, `extract_insights`, `review_insights`, `narrate`, `get_run`, `list_runs`, `compare_runs`, `search_similar_hypotheses`, `find_duplicates`).
-- **Agent Layer** — `aqr/agent/`: LangGraph-граф; `SessionContext` подмешивает историю и непроверенные комбинации в `session_context_prompt`.
-- **Chat Layer** — `aqr/chat/`: WebSocket `/chat/{token}` + Web UI на vanilla JS (тёмная тема, markdown, slash-команды).
-- **Data Layer** — `aqr/data/`: `TInvestAdapter` (gRPC, sandbox-ready), `OhlcvCache` (DuckDB).
-
-Один процесс. Фон — `aqr.tasks.schedule(...)` (с retention set против GC). Никакого Redis/Celery.
-
-## Точки входа
-
-| Что | Команда / URL |
-|---|---|
-| HTTP API | `uvicorn aqr.main:app --port 8000` |
-| Web UI | открыть `http://localhost:8000/chat` в браузере |
-| Agent программно | `from aqr.agent.graph import run_agent; await run_agent(...)` |
-| WebSocket | `WS /chat/{token}`, протокол в `aqr/chat/ws.py` (см. ниже) |
-| Реестр | `from aqr.registry import RegistryStore` + `from aqr.db import get_db` |
-| Токен для WS | `GET /chat/new?session_id=...` → `{token, session_id}` |
-
-**CLI удалён.** Все взаимодействие — через HTTP API / WebSocket / `run_agent`.
-
-LLM-режим: `AQR_LLM_MODEL` + один из `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GIGACHAT_CREDENTIALS` (обязательно). Эмбеддинги — `OPENAI_API_KEY` (обязательно). Свечи — `INVEST_TOKEN` (обязательно).
-
-## Как запускать локально
+## Quick start
 
 ```bash
-# venv (Python 3.11+)
+# venv + deps
 python3.11 -m venv .venv
 .venv/bin/pip install -e ".[dev,llm,embeddings]"
+.venv/bin/pip install t-tech-investments --index-url https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple
 
-# t-tech-investments — из приватного index T-Bank
-.venv/bin/pip install t-tech-investments \
-  --index-url https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple
+# Postgres (через docker compose)
+docker compose -f aqr-compose.yml up -d
+.venv/bin/alembic upgrade head
 
-# Postgres
-docker run -d --name aqr-pg -e POSTGRES_PASSWORD=aqr -e POSTGRES_DB=aqr \
-  -p 5432:5432 pgvector/pgvector:pg16
-docker start aqr-pg   # после рестарта
+# .env — автоподгружается через python-dotenv в startup.py
+cat > .env << EOF
+DATABASE_URL=postgresql+asyncpg://postgres:aqr@localhost:5432/aqr
+AQR_SESSION_SECRET=\$(openssl rand -base64 32)
+AQR_LLM_MODEL=deepseek/deepseek-chat
+DEEPSEEK_API_KEY=sk-...
+OPENAI_API_KEY=ollama
+OPENAI_BASE_URL=http://localhost:11434/v1
+INVEST_TOKEN=t.INVEST_TOKEN...
+SSL_TBANK_VERIFY=true
+EOF
 
-# Миграции
-DATABASE_URL=postgresql+asyncpg://postgres:aqr@localhost:5432/aqr \
-  .venv/bin/alembic upgrade head
-
-# Обязательные env (минимальный набор для запуска):
-export DATABASE_URL="postgresql+asyncpg://postgres:aqr@localhost:5432/aqr"
-export AQR_LLM_MODEL="claude-3-5-sonnet-20241022"
-export ANTHROPIC_API_KEY="sk-ant-..."     # или OPENAI_API_KEY, или GIGACHAT_CREDENTIALS
-export OPENAI_API_KEY="sk-..."             # для эмбеддингов
-export INVEST_TOKEN="t.INVEST_TOKEN..."    # t-Invest
-export INVEST_SANDBOX=1                    # sandbox по умолчанию для dev/CI
-export AQR_SESSION_SECRET="$(openssl rand -base64 32)"  # для WS HMAC
-
-# Запуск
 .venv/bin/uvicorn aqr.main:app --port 8000
-
-# Без обязательной переменной — RuntimeError на старте, uvicorn падает
 ```
 
-`DATABASE_URL` — env-переменная для Postgres. Дефолт `postgresql+asyncpg://postgres:aqr@localhost:5432/aqr`. Читается в `aqr/db.py` и `alembic/env.py`. На старте валидируется через `aqr.startup.validate_runtime()`.
+Startup (`validate_runtime`) требует только `DATABASE_URL` + `AQR_SESSION_SECRET`. LLM/Invest/embeddings-ключи проверяются при первом использовании. Без одного из них — RuntimeError на старте.
 
-## Структура проекта
+## Архитектура
 
 ```
 aqr/
-  pipeline/        # оркестратор: planner, executor, narrator, SSE-events, FastAPI роуты
-  tools/           # Tool Layer (13 инструментов)
-  agent/           # LangGraph граф + SessionContext + run_agent
-  agents/          # 5-role team: Editor/Browser/Analyst/Reviewer/Writer + orchestrator
-  chat/            # WS /chat/{token} + Web UI
-    ws.py          # WebSocket endpoint и контракт
-    web.py         # GET /chat (HTML) + GET /chat/new (token)
-    templates/     # chat.html — vanilla JS, dark theme
-  registry/        # models, store, embeddings (только OpenAI)
-  validation/      # Deflated Sharpe, PBO, CPCV, Reality Check — reference
-  data/
-    tinvest.py     # TInvestAdapter (gRPC, sandbox, lazy FIGI cache)
-    ohlcv_cache.py # DuckDB-кэш OHLCV (lazy duckdb import)
-  screener/        # VectorBT-скринер (screen_momentum — SMA-crossover)
-  executor/        # NautilusTrader-бэктесты (commission, slippage)
-  mcp/             # T-Invest MCP сервер (JSON-RPC для LLM-агентов)
-  api/             # v0.4 API endpoints (/team/run, /executor/nautilus, /mcp/rpc)
-  logging_config.py # JsonFormatter + log_tool_call
-  auth.py          # HMAC-подписанные session_id-токены (SEC-1)
-  startup.py       # validate_runtime() — обязательные env + доступность зависимостей
-  tasks.py         # Retention set для фоновых asyncio-задач (PERF-1)
-  main.py          # FastAPI app: /health, /health/ready, /pipeline/*, /chat/*, /chat, /team/*, /executor/*, /mcp/*
-alembic/versions/  # миграции: fcb396c4088d (initial) + a1b2c3d4e5f6 (chat_messages)
-tests/             # тесты (см. ниже)
+  agent/      LangGraph граф (plan→load→generate→backtest→validate→narrate→respond)
+  tools/      ToolSpec + ToolRegistry, 13 инструментов (8 pipeline + 5 storage)
+  agents/     5-role team: Editor/Browser/Analyst/Reviewer/Writer + orchestrator
+  chat/       WS /chat/{token} (HMAC auth) + Web UI (vanilla JS, dark theme)
+  pipeline/   PipelineExecutor, EventBus (SSE), hypothesis families, planner/narrator
+  registry/   Postgres + pgvector (Alembic), Embedder, RegistryStore
+  data/       TInvestAdapter (AsyncClient), OhlcvCache (DuckDB)
+  validation/ DSR, CPCV, PBO, Reality Check (Bailey & López de Prado)
+  screener/   VectorBT — screen_momentum (SMA-crossover grid search)
+  executor/   NautilusTrader — с комиссиями и slippage (native fallback если не установлен)
+  api/        POST /team/run, /executor/nautilus, /mcp/rpc
+  mcp/        JSON-RPC 2.0 (get_candles, resolve_figi, search_similar, find_duplicates)
 ```
 
-## WebSocket-протокол (контракт `aqr/chat/ws.py`)
+## Ключевые точки входа
 
-Клиент → сервер:
-```json
-{"type": "message", "content": "проверь momentum на Сбере"}
-{"type": "resume"}                              // запрос истории из БД
-{"type": "ping"}                                // keepalive
-```
+| Что | Команда |
+|---|---|
+| HTTP | `uvicorn aqr.main:app --port 8000` |
+| Web UI | открыть `http://localhost:8000/chat` |
+| Agent программно | `from aqr.agent import run_agent; await run_agent(...)` |
+| WS | `WS /chat/{token}`, токен через `GET /chat/new?session_id=...` |
+| Реестр | `from aqr.registry import RegistryStore` + `from aqr.db import _async_session_factory` |
 
-Сервер → клиент:
-```json
-{"type": "connected",  "session_id": "..."}
-{"type": "history",    "messages": [{"role", "content", "created_at"}]}
-{"type": "user_echo",  "content": "..."}
-{"type": "progress",   "node": "...", "data": {...}}
-{"type": "tool_call",   "name": "...", "args": {...}}
-{"type": "tool_result", "name": "...", "result": {...}}
-{"type": "assistant",   "content": "..."}
-{"type": "done",        "narrative": "...", "assistant": "...", "elapsed_seconds": N, "n_results": M}
-{"type": "error",       "message": "..."}
-{"type": "pong"}
-```
+## WebSocket-протокол
 
-Auth: `WS /chat/{token}` где `token` — это HMAC-подпись `exp:session_id`, выданная через `GET /chat/new?session_id=...`. Без токена — `close(1008)`. **HMAC обязателен — legacy-режим удалён.**
+Клиент → сервер: `{"type": "message"|"resume"|"ping"}`
+Сервер → клиент: `{"type": "connected"|"history"|"user_echo"|"progress"|"tool_call"|"tool_result"|"assistant"|"done"|"error"|"pong"}`
+
+Auth: HMAC-подпись через `aqr.auth.sign_session(session_id)`. Без токена — `close(1008)`.
 
 ## Инварианты (не нарушать)
 
-1. **Никакого look-ahead.** В `aqr/tools/core.py:backtest_one` позиция сдвигается на 1 бар (`pos.shift(1).fillna(0.0)`).
-2. **Fallback запрещён.** `ChatPlanner.plan`, `Narrator.narrate`, `InsightReviewer.review`, `Embedder.embed`, `TInvestAdapter.candles` — **всегда** требуют ключей / сети. Любая ошибка → raise, без возврата к шаблону или synthetic-данным.
-3. **Порядок событий SSE**: `planning → data → generating → backtesting × N → validating → insight × M → narrating → done`; при ошибке — `error`. Эмитятся через `await self._emit()` в `PipelineExecutor`.
-4. **Валидация — источник истины.** Sharpe без DSR не показывать как «значимый». `DSR ≥ 0.95` → `significant`, `0.80–0.95` → `borderline`.
-5. **Tool registry заполняется через `register_all()`** — идемпотентен (`if len(registry) >= 13: return` + `_safe_register`). Безопасно вызывать из `PipelineExecutor.run` и `agent/graph.py:run_agent`.
-6. **UUID-консистентность для pipeline-run.** В `aqr/pipeline/api.py:start_run` генерируется `uuid.uuid4()` ОДИН раз и используется для BUS, БД и `_run_and_persist`. Если создавать UUID отдельно в BUS и store — будет FK-violation на `hypotheses.run_id`. Найдено и исправлено в REVIEW.md (BUG-FK-1).
-7. **Lazy imports** для duckdb (`ohlcv_cache.py`) и `t_tech.invest` (`tinvest.py`) — `import` только в методах, чтобы `aqr.main` стартовал без всех зависимостей поднятых сразу.
-8. **T-Invest strict.** `TInvestAdapter.candles` — **одна попытка**, без retry/circuit-breaker. На любую ошибку (сеть, таймаут, неизвестный FIGI) — `raise`. Если нужно устойчивости — это проблема клиента, не адаптера.
-9. **Background-task retention.** `asyncio.create_task` без strong-ref теряется при GC. Использовать `aqr.tasks.schedule(coro)` вместо прямого вызова — retention set + done-callback. На FastAPI shutdown `tasks.drain(timeout=30)` дожидается завершения.
-10. **WS auth — только HMAC.** Токен выпускается через `aqr.auth.sign_session(session_id)`, проверяется через `verify_token(token)`. `AQR_SESSION_SECRET` обязателен в проде (иначе ephemeral на процесс — клиенты теряют сессии при рестарте).
-11. **Startup validation.** `aqr.startup.validate_runtime()` вызывается в `lifespan` до `yield` и проверяет `DATABASE_URL`+SELECT 1, `AQR_LLM_MODEL`+один из ключей, `OPENAI_API_KEY`, `INVEST_TOKEN`, `AQR_SESSION_SECRET`. Без всех — `RuntimeError`, FastAPI не стартует.
+1. **Look-ahead запрещён.** `backtest_one` сдвигает позицию на 1 бар (`pos.shift(1).fillna(0.0)`).
+2. **Fallback запрещён.** Planner, narrator, reviewer, embedder, TInvestAdapter — всегда требуют ключи/сеть. Любая ошибка → raise.
+3. **Tool registry** заполняется через `register_all()` — идемпотентен через `_registration_done` флаг.
+4. **Lazy imports.** `duckdb` (`ohlcv_cache.py`), `vectorbt` (`screener/vectorbt.py`), `t_tech.invest` (`tinvest.py`) — import только в методах.
+5. **Background-task retention.** Использовать `aqr.tasks.schedule(coro)` вместо `asyncio.create_task` (GC съедает без strong-ref).
+6. **WS auth — только HMAC.** `AQR_SESSION_SECRET` обязателен в проде (иначе сессии теряются при рестарте).
+7. **Per-session credentials** пробрасываются через `ContextVar` (`set_credentials`/`current_credentials`/`reset_credentials`). Этот же механизм использует и `_api_key_from_context()` в Embedder, и `TInvestAdapter.__init__`.
 
-## Gotchas (то, что легко забыть)
+## Gotchas
 
-### `TInvestAdapter.candles` принимает интервалы из фиксированного набора
+### TInvestAdapter — новый SDK (1.0.0+)
 
-`TInvestAdapter.INTERVAL_MAP = {"1m": ..., "5m": ..., "15m": ..., "H1": ..., "D1": ..., "W": ..., "M": ...}` — 7 интервалов через T-Invest `CandleInterval`.
+Переписан под `AsyncClient` (async context manager). Методы `candles()` и `_resolve_figi()` — **async**:
 
-- ❌ `adapter.candles("SBER", ..., interval="2H")` — `KeyError`. Либо валидный ключ, либо отказ.
-- ✅ `adapter.candles("SBER", ..., interval="H1")` или `interval="D1"`.
+```python
+adapter = TInvestAdapter()
+figi = await adapter._resolve_figi("SBER")
+df = await adapter.candles("SBER", "2023-01-01", "2024-12-31", interval="D1")
+```
 
-В `aqr/tools/core.py:load_prices` интервал пробрасывается из `plan.timeframe`. LLM-планировщик должен выбирать только из поддерживаемого набора.
+Sandbox endpoint не отдаёт свечи. Все запросы market data идут на production target (`INVEST_GRPC_API`), независимо от `INVEST_SANDBOX`.
 
-### `TInvestAdapter._resolve_figi` — lazy с class-level cache
+FIGI resolution: при нескольких FIGI предпочитает Bloomberg (начинается с `BBG`). Для правильного поиска шер передаёт `instrument_kind=InstrumentType.INSTRUMENT_TYPE_SHARE`.
 
-Первый вызов `candles("SBER", ...)` → gRPC `InstrumentsService.get_instrument_by_ticker`, кэш в `cls._figi_cache`. Неизвестный тикер → `raise ValueError`. Если нужно сбросить — `TInvestAdapter.clear_figi_cache()`.
+### CandleInterval — расширенный набор
 
-Тесты патчат через `monkeypatch.setattr("t_tech.invest.Client", _FakeClient)` или оборачивают `TInvestAdapter.candles` напрямую.
+Дополнительно к 7 базовым (`1m/5m/15m/H1/D1/W/M`) поддерживаются `2m/3m/10m/30m/2H/4H`.
 
-### 5-agent team orchestrator использует `asyncio.gather`
-
-В `aqr/v04/agents/orchestrator.py:run_team` analyst-задачи запускаются параллельно через `asyncio.gather(*analyst_tasks)` — по одному task на тикер. Browser-task запускается как `asyncio.create_task` параллельно с analyst-ами.
-
-Ошибки в отдельных task-ах не валят весь пайплайн: `return_exceptions=True` + проверка `isinstance(ar, Exception)`. Все ошибки собираются в `TeamResult.agent_errors`.
-
-### `backtest_one` принимает `cpcv_*` и `embargo_pct` параметры
-
-RPC `plan.validation: {cpcv_splits, cpcv_test_splits, embargo_pct}` **должна** пробрасываться в `backtest_one(...)` явно. Дефолты в инструменте (`6/2/0.01`) — fallback только в смысле default-значения, не «магические числа».
-
-Сейчас пробрасывается в:
-- `aqr/agent/graph.py:backtest_node`
-- `aqr/pipeline/executor.py:run`
-
-При добавлении нового caller-а не забудь.
-
-### `OhlcvCache` хранит NaN-safe: `close` is `NOT NULL`
-
-`put_cache` пропускает строки с NaN/None close (использует хелпер `_safe_float`). Если добавить новое поле, тоже прогон через `_safe_float`.
-
-### Путь к кэшу зависит от env
-
-- Дефолт: `~/.aqr/ohlcv_cache.duckdb` (НЕ `data/` относительно CWD — раньше был, теперь нет).
-- Override: `AQR_CACHE_DIR=/path/to/dir`.
-- Тесты переопределяют через monkeypatch на `OhlcvCache.__init__`.
-
-### Реестр инструментов
-
-После `register_all()` в `aqr.tools.registry` ровно **13** инструментов:
-- 8 pipeline: `plan_research, load_prices, generate_hypotheses, backtest_one, validate_portfolio, extract_insights, review_insights, narrate`
-- 5 storage: `get_run, list_runs, compare_runs, search_similar_hypotheses, find_duplicates`
-
-Тест: `tests/test_tools.py::TestToolRegistry::test_list_all_returns_13_tools`. При добавлении — обновить и `len(registry) >= N` в `register.py`.
-
-### `t-tech-investments` — установка через кастомный index-url
-
-PyPI-зеркало приватное: `https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple`. Без `--index-url` pip не найдёт пакет. CI должен использовать:
+### SSL в РФ-окружении
 
 ```bash
-pip install t-tech-investments \
-  --index-url https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple
+export SSL_TBANK_VERIFY=true   # сертификат МинЦифры поставляется с t-tech-investments
 ```
 
-`pyproject.toml` для uv:
+### LLM-провайдеры
 
-```toml
-[tool.uv.sources]
-t-tech-investments = { index = "tbank" }
+litellm требует provider prefix: `deepseek/deepseek-chat`, `anthropic/claude-3-5-sonnet-20241022`. Без префикса — `BadRequestError`.
 
-[[tool.uv.index]]
-name = "tbank"
-url = "https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple"
+Поддерживаемые env: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `GIGACHAT_CREDENTIALS`. `_has_llm_key()` в `graph.py` проверяет их все + `current_credentials()` из ContextVar.
+
+### Эмбеддинги — Ollama (дефолт) или OpenAI
+
+`Embedder` по умолчанию использует `nomic-embed-text` (768d). `OPENAI_BASE_URL` задаёт кастомный endpoint; `OPENAI_API_KEY=ollama` для локального Ollama (игнорируется).
+
+Размерность вектора: 768 (задана в `EMBEDDING_DIM` в `embeddings.py` и в `Vector(768)` в `models.py`). Менять — синхронно в обоих файлах + `ALTER TABLE hypotheses ALTER COLUMN embedding TYPE vector(N)`.
+
+### `screen_momentum` принимает опциональные цены
+
+```python
+screen_momentum("SBER", candles=preloaded_df)
 ```
 
-### `INVEST_SANDBOX` env
+Без `candles` пытается загрузить из T-Invest через `asyncio.run()`. Из тестов передавать цены напрямую.
 
-- `1` (default) — sandbox target (`INVEST_GRPC_API_SANDBOX`), заявки не уходят на биржу
-- `0` — production target (`INVEST_GRPC_API`)
+### CPCV-параметры
 
-Для CI/тестов всегда sandbox. Для реальной торговли — production с реальным токеном.
-
-### `SSL_TBANK_VERIFY` env
-
-Если в РФ-окружении падает SSL-проверка, можно включить сертификат МинЦифры, поставляемый с `t-tech-investments`:
-
-```bash
-export SSL_TBANK_VERIFY=True
-```
-
-### Двух-модульный import `_async_session_factory`
-
-`aqr/tools/core.py:plan_research` импортирует `_async_session_factory` **лениво** внутри функции. Остальные модули (`tools/storage.py`, `agent/context.py`, `chat/ws.py`) — на top-level. В тестах при патче нужно мокать в обоих namespace (см. паттерн моков ниже).
-
-## Что нельзя трогать без явной причины
-
-- `aqr/validation/` — формулы Bailey & López de Prado. Покрыты `tests/test_validation.py`; правки — обязательный перепрогон.
-- `aqr/data/tinvest.py` — адаптер к T-Invest gRPC. Менять по документации https://developer.tbank.ru/invest/intro/intro и https://opensource.tbank.ru/invest/invest-python.
-- `aqr/pipeline/events.py:Event` — поля `kind`, `stage`, `message`, `data`, `ts` завязаны на SSE UI.
-- `aqr/registry/models.py` — менять схему только через новую миграцию Alembic.
-- `aqr/chat/ws.py` — WebSocket-контракт. Web UI в `aqr/chat/templates/chat.html` зависит от точных имён полей. Менять — синхронно обновлять оба.
-- `aqr/chat/templates/chat.html` — vanilla JS, без бандлера. Правки сразу в файле.
-- `aqr/startup.py` — список обязательных env. Менять только при добавлении/удалении зависимости уровня infra.
-
-## Рецепты
-
-### Добавить семейство гипотез
-1. `_my_signal(p1, p2) -> Callable[[pd.Series], pd.Series]` в `aqr/pipeline/hypotheses.py`.
-2. Ветка `if family == "my_family"` в `_make_one()` и `make_one_with_params()`.
-3. В `aqr/pipeline/planner.py` описание семейства в `PLANNER_SYSTEM` (LLM-режим; keyword-парсер удалён вместе с `_fallback_plan`).
-4. Тест в `tests/test_pipeline_e2e.py`: ключевое слово → правильное family (через мок LLM).
-
-### Добавить тикер T-Invest
-Тикеры не нуждаются в регистрации — `TInvestAdapter._resolve_figi` лениво подтягивает FIGI через `InstrumentsService`. Если тикер не находится — `ValueError` в `load_prices`.
-
-### Добавить новый инструмент
-1. Async-функция в `aqr/tools/core.py`.
-2. `ToolSpec` в `register.py::register_all()` через `_safe_register`.
-3. Тест в `tests/test_tools.py`. Обновить `test_list_all_returns_13_tools` → `_N_tools` и порог в `register.py`.
-
-### Добавить Web UI endpoint или страницу
-1. FastAPI router в `aqr/chat/web.py` (или новый модуль).
-2. Подключить в `aqr/main.py:app.include_router(...)`.
-3. Если HTML — положить в `aqr/chat/templates/<name>.html` и загружать через `Path(__file__).parent / "templates" / "<name>.html"`.
-4. Тест в `tests/test_chat_web.py` через `fastapi.testclient.TestClient`.
-
-### Изменить WebSocket-протокол
-1. Менять и сервер (`aqr/chat/ws.py:handle_message` / `_run_agent_for_session`), и клиент (`aqr/chat/templates/chat.html:handleServerMessage`).
-2. Если меняются поля — обновить docstring в `aqr/chat/ws.py:1-18`.
-3. Добавить тест в `tests/test_chat_ws.py`.
-
-### Новая миграция Alembic
-```bash
-.venv/bin/alembic revision --autogenerate -m "add field x"
-# отредактировать файл, перепрогнать:
-.venv/bin/alembic upgrade head
-.venv/bin/alembic check    # модели не расходятся с миграциями
-```
-`alembic/env.py` подхватывает `Base` из `aqr/registry/models.py` — autogenerate работает.
-
-### Добавить новую обязательную зависимость на старте
-1. Добавить проверку в `aqr/startup.py::validate_runtime()` — поднять `RuntimeError` с понятным сообщением, какая env-переменная отсутствует.
-2. Обновить `.env.example` — пометить обязательную переменную.
-3. Обновить раздел «Как запускать локально» в этом файле.
+`plan.validation: {cpcv_splits, cpcv_test_splits, embargo_pct}` должна явно пробрасываться в `backtest_one(...)`. Сейчас пробрасывается из `agent/graph.py:backtest_node` и `pipeline/executor.py:run`.
 
 ## Тесты
 
-`pytest-asyncio` в режиме `auto` — async-тесты **без `@pytest.mark.asyncio``, просто `async def test_...`.
-
-**Тесты запускаются только с обязательными env** (DATABASE_URL, AQR_LLM_MODEL, ANTHROPIC_API_KEY/OPENAI_API_KEY, OPENAI_API_KEY, INVEST_TOKEN, AQR_SESSION_SECRET). Без них часть тестов skip'ится или падает. Coverage ≥80%.
-
-Полный список в `tests/`:
-
-- `test_validation.py` — DSR/PBO/CPCV/Reality Check (reference)
-- `test_pipeline_e2e.py` — LLM-планировщик + e2e с моком `litellm.completion`
-- `test_tools.py` — `ToolRegistry` + 13 изолированных инструментов
-- `test_agent.py` — граф, роутер, `SessionContext`, `run_agent()` e2e
-- `test_chat_ws.py` — WebSocket через FastAPI TestClient (с моками агента и БД)
-- `test_chat_web.py` — Web UI endpoints: `/chat`, `/chat/new`, integration с WS
-- `test_ohlcv_cache.py` — DuckDB-кэш + NaN-handling + `AQR_CACHE_DIR`
-- `test_cache_reuse.py` — кэш переиспользуется между прогонами
-- `test_embeddings.py` — OpenAI embeddings + дедуп (с моком openai)
-- `test_context.py` — `SessionContext` с моком БД
-- `test_storage_tools.py` — storage-инструменты с моком БД
-- `test_tinvest.py` — TInvestAdapter: FIGI cache, intervals, sandbox target, error propagation
-- `test_health.py` — `/health` + `/health/ready` + startup validation
-- `test_logging_config.py` — `JsonFormatter` + `log_tool_call`
-- `test_cpcv_edge.py` — purge/embargo edge cases
-- `test_api_routes.py` — FastAPI роуты + `_run_and_persist`
-- `test_auth.py` — HMAC sign/verify round-trip + edge cases
-- `test_startup.py` — validate_runtime() отказ при отсутствии env
-- `test_v04_screener.py` — VectorBT screener: 6 тестов (import, sorting, top-N, constraint, credentials)
-- `test_v04_agents.py` — 5-agent team: 24 теста (каждый агент изолированно + orchestrator e2e с моками)
+- `pytest-asyncio` в режиме `auto` — `async def` без `@pytest.mark.asyncio`
+- Нужен `.env` с переменными (DATABASE_URL, AQR_SESSION_SECRET) — без них часть тестов падает
+- `pytest --cov` вызывает `ImportError` на некоторых модулях. В CI: `coverage run -m pytest`
 
 ### Паттерн моков
 
-- `_async_session_factory` → подменять в `aqr.db` И в импортирующем модуле (binding в namespace). Топ-уровневый импорт: `tools/storage.py`, `agent/context.py`, `chat/ws.py`. Lazy: `tools/core.py:plan_research`.
-- `RegistryStore` → подменять в `aqr.registry.store` И в импортирующем модуле (`aqr.tools.storage`, `aqr.tools.core`, `aqr.pipeline.api`, `aqr.agent.context`).
-- `TInvestAdapter` → `monkeypatch.setattr(aqr.data.tinvest, "TInvestAdapter", _FakeAdapter)` (через класс, не инстанс). Для FIGI cache — `TInvestAdapter.clear_figi_cache()` в фикстуре.
-- `t_tech.invest.Client` → `monkeypatch.setitem(sys.modules, "t_tech.invest", _FakeModule)` или `monkeypatch.setattr("t_tech.invest.Client", _FakeClient)`.
-- `get_agent` в WS-тестах → патчить `aqr.agent.graph.get_agent` И `aqr.chat.ws.get_agent`.
-- `litellm.completion` → `monkeypatch.setitem(sys.modules, "litellm", fake_module)` с фейковым `completion`, возвращающим нужный JSON.
-- `openai.AsyncOpenAI` → `monkeypatch.setitem(sys.modules, "openai", fake_module)` (для Embedder).
-
-### Известный баг pytest-cov
-
-При `pytest --cov=aqr.chat.web` (или любой другой новый модуль с WebSocket-тестами) падают 12 тестов с `ImportError: cannot load module more than once per process` (numpy + coverage interaction). Без `--cov` всё работает. Решение для CI — `coverage run -m pytest` вместо `pytest --cov`.
-
-## Известные ограничения
-
-- **ivfflat-индекс на `hypothesis.embedding`** — намеренно отложен (`__ivfflat_deferred__` в `models.py`). Нельзя на пустой таблице; добавить отдельной миграцией после >1000 строк.
-- **PBO cross-ticker** — текущий `validate_portfolio` берёт общий суффикс `daily_returns` от разных тикеров; статистически некорректно. Per-ticker PBO — в TODO.
-- **FIGI cache in-memory** — `TInvestAdapter._figi_cache` живёт до перезапуска процесса. Несколько воркеров uvicorn получают разные кэши — это OK, т.к. lookup идёт через gRPC idempotent.
-- **SSL в РФ-окружении** — если корневые CA не проходят проверку, нужен `SSL_TBANK_VERIFY=True`. Дефолт выключен.
-- **T-Invest rate limits** — 300 req/min на user-units. `load_prices` сейчас без backpressure; при массовых прогонах может упереться. В TODO — semaphore per session.
-- **Web UI не покрыт browser-тестами.** Vanilla JS — рендеринг и WebSocket-клиент тестируются вручную. CI покрывает только серверные endpoints.
-- **Sandbox vs prod** — `INVEST_SANDBOX=1` по умолчанию. Sandbox имеет ограниченный universe инструментов и тестовые счета; реальные FIGI/свечи только в production-токене.
-
-## Что уже сделано (v0.3 → v0.4)
-
-### v0.3 (strict-mode, работает end-to-end)
-
-- ✅ **T-Invest gRPC**: `aqr/data/tinvest.py` — `TInvestAdapter` с lazy FIGI cache, 7 интервалов (1m/5m/15m/H1/D1/W/M), sandbox по дефолту.
-- ✅ **Validation**: DSR (Bailey-López de Prado), CPCV, PBO в `aqr/validation/`.
-- ✅ **Tool Layer**: 13 инструментов в `aqr.tools.registry` (8 pipeline + 5 storage).
-- ✅ **Agent Layer**: линейный LangGraph-граф в `aqr/agent/graph.py` (plan → load → generate → backtest → validate → narrate → respond).
-- ✅ **Storage**: Postgres + pgvector, `session_settings` с Fernet-encrypted credentials (HKDF от `AQR_SESSION_SECRET`), `chat_messages` для WS-истории.
-- ✅ **Chat**: WS `/chat/{token}` с HMAC auth, per-session credentials через ContextVar (`/chat/{token}/settings` форма), vanilla-JS UI.
-- ✅ **Startup validation**: `aqr/startup.py::validate_runtime()` — auto-provision Postgres-контейнера + обязательные env.
-- ✅ **Tests**: 269 passed, coverage ≥83% (≥80% gate).
-
-### v0.4 (новые компоненты)
-
-- ✅ **VectorBT screener**: `aqr/screener/vectorbt.py::screen_momentum` — grid-search SMA-crossover параметров (Numba JIT, lazy vectorbt import). 6 тестов.
-- ✅ **5-agent team**: `aqr/agents/` — Editor → Browser + Analyst (parallel per ticker) → Reviewer → Writer. Orchestrator с `asyncio.gather`. 24 теста, 8 файлов.
-- ✅ **NautilusTrader executor**: `aqr/executor/nautilus.py::execute_with_slippage` — возвращает `BacktestResult` dataclass с realistic execution (комиссии 0.05%, slippage 1 tick). Graceful fallback без nautilus_trader. 7 тестов.
-- ✅ **T-Invest MCP Server**: `aqr/mcp/` — JSON-RPC 2.0 интерфейс (protocol, server, client). Методы: `get_candles`, `resolve_figi`, `search_similar`, `find_duplicates`. 15 тестов.
-- ✅ **API endpoints**: `aqr/api/routes.py` — `POST /team/run`, `POST /executor/nautilus`, `POST /mcp/rpc`. Подключены в `aqr/main.py`. 4 теста.
-
-Слабые места (дальнейшие этапы):
-- Нет slash-команд `/team`, `/screener`, `/executor` в WebSocket.
-- NautilusTrader BacktestEngine интеграция — сейчас native fallback (нужен установленный пакет).
-
-## План переделывания (v0.4 → v0.5)
-
-| Компонент | Статус | Рекомендация | Обоснование |
-|---|---|---|---|
-| Быстрый скрининг идей | ✅ v0.4 | **VectorBT** (open-source, с осознанием что развитие остановлено) | Скорость итераций для проверки «есть ли edge». Numba-ускоренные бэктесты на 1000+ параметров за минуты. |
-| Оркестрация LLM-агентов | ✅ v0.4 | **5-role team** (Editor/Browser/Analyst/Reviewer/Writer) | asyncio.gather, параллельный research, реактивная архитектура. |
-| Валидация отобранных стратегий | 🚧 **следующий** | **NautilusTrader** | Реалистичное моделирование исполнения перед paper trading: комиссии, slippage, частичное исполнение, order book. |
-| Доступ к брокерским данным | 🚧 **следующий** | **T-Invest MCP Server** | Стандартизованный JSON-RPC интерфейс для LLM-агентов. |
-| API endpoints | 🚧 **следующий** | **FastAPI роуты** | `POST /team/run`, `POST /executor/nautilus`, `POST /mcp/rpc`. |
-| WebSocket slash-команды | 📅 **Phase 2** | `/team`, `/screener`, `/executor` | Интеграция v0.4 в Web UI. |
-
-### Следующие этапы
-
-1. **WebSocket slash-команды** (Phase 2 — после UI)
-   - `/team {goal}` → `run_team(goal)` вместо `run_agent`
-   - `/screener {ticker}` → `screen_momentum(ticker)`
-   - `/executor {hypothesis}` → `execute_with_slippage(...)`
-
-2. **NautilusTrader BacktestEngine** — полноценная интеграция (сейчас native fallback)
-   - Event-driven через BacktestEngine
-   - Комиссии, slippage, частичное исполнение
-   - `pip install nautilus_trader`
-
-3. **Тесты Web UI** — browser-тесты для chat.html (vanilla JS WebSocket-клиент)
+- `TInvestAdapter` → `monkeypatch.setattr(aqr.data.tinvest, "TInvestAdapter", _FakeAdapter)` (класс целиком)
+- `_async_session_factory` → патчить в `aqr.db` И в импортирующем модуле
+- `litellm` → `monkeypatch.setitem(sys.modules, "litellm", fake_module)` с `AsyncMock(fake_resp)`
+- `get_agent` → патчить `aqr.agent.graph.get_agent` И `aqr.chat.ws.get_agent`
+- `REGISTRY` → `aqr.tools.register._reset_registration_done()` + `reset_for_testing()` между тестами
 
 ## Стиль
 
-- `from __future__ import annotations` в каждом модуле.
-- Type hints обязательны.
-- Docstring — на русском или английском, **консистентно в модуле**.
-- Без emoji в коде и коммитах.
-- Модули до 400 строк (допустимо исключение для оркестраторов с >500).
-- HTML-шаблон — без бандлера, vanilla JS, инлайнить CSS в `<style>` или отдельный файл в `templates/`.
-
-## Как проверить проект руками
-
-```bash
-# 1. Запуск с обязательными env
-docker start aqr-pg
-export DATABASE_URL="postgresql+asyncpg://postgres:aqr@localhost:5432/aqr"
-export AQR_LLM_MODEL="claude-3-5-sonnet-20241022"
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."
-export INVEST_TOKEN="t.INVEST_TOKEN..."
-export INVEST_SANDBOX=1
-export AQR_SESSION_SECRET="$(openssl rand -base64 32)"
-
-.venv/bin/alembic upgrade head
-.venv/bin/uvicorn aqr.main:app --port 8000
-
-# Без обязательной переменной — упадёт с RuntimeError на старте
-unset INVEST_TOKEN
-.venv/bin/uvicorn aqr.main:app --port 8000
-# RuntimeError: validate_runtime() failed: INVEST_TOKEN is required
-
-# 2. Web UI
-open http://localhost:8000/chat   # ввести session_id, например "alice"
-
-# 3. API
-curl http://127.0.0.1:8000/health            # 200
-curl http://127.0.0.1:8000/health/ready      # 200 если все зависимости OK
-curl -X POST http://127.0.0.1:8000/pipeline/runs \
-  -H "Content-Type: application/json" \
-  -d '{"goal":"проверь momentum на Сбере"}'
-
-# 4. Остановить
-pkill -f "uvicorn aqr.main"
-```
+- `from __future__ import annotations` в каждом модуле
+- Type hints обязательны
+- Без emoji в коде и коммитах
+- HTML-шаблоны — vanilla JS, без бандлера
