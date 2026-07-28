@@ -121,13 +121,15 @@ def deflated_sharpe_ratio(
 
     euler_mascheroni = 0.5772156649
     n = max(int(n_trials), 1)
+    _epsilon = 1e-12
 
     if n == 1:
         expected_max_sr = 0.0
     else:
         # Bailey & Lopez de Prado (2014), eq. (2)
         phi_inv_1 = stats.norm.ppf(1.0 - 1.0 / n)
-        phi_inv_2 = stats.norm.ppf(1.0 - 1.0 / (n * np.e))
+        # Используем epsilon чтобы избежать ppf(1.0) → inf при больших n
+        phi_inv_2 = stats.norm.ppf(1.0 - max(1.0 / (n * np.e), _epsilon))
         expected_max_sr = np.sqrt(v) * (
             (1.0 - euler_mascheroni) * phi_inv_1 + euler_mascheroni * phi_inv_2
         )

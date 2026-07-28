@@ -1,10 +1,9 @@
 """Изолированные тесты на инструменты ToolRegistry."""
 from __future__ import annotations
 
-import os
 import sys
 import types
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
@@ -50,16 +49,16 @@ def with_credentials():
 
 @pytest.fixture
 def fake_litellm(monkeypatch):
-    """Мок litellm.completion с настраиваемым JSON-ответом."""
+    """Мок litellm.acompletion с настраиваемым JSON-ответом."""
     def _install(content: str):
         fake_resp = MagicMock()
         fake_resp.choices = [MagicMock()]
         fake_resp.choices[0].message.content = content
 
         fake_module = types.ModuleType("litellm")
-        fake_module.completion = MagicMock(return_value=fake_resp)
+        fake_module.acompletion = AsyncMock(return_value=fake_resp)
         monkeypatch.setitem(sys.modules, "litellm", fake_module)
-        return fake_module.completion
+        return fake_module.acompletion
 
     return _install
 

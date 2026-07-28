@@ -7,6 +7,11 @@ WebSocket-handshake). На `WS /chat/{token}` сервер проверяет п
 
 Если `AQR_SESSION_SECRET` не задан, генерируется ephemeral-ключ на старте
 процесса — это OK для dev, но в проде клиенты теряют сессии при рестарте.
+
+B14: `verify_token_async` дополнительно проверяет, что `session_id`
+существует в БД (sessions table). Без этой проверки HMAC-валидный
+токен продолжает работать после удаления сессии — клиент получит
+404/500 на каждый запрос вместо явного close(1008).
 """
 from __future__ import annotations
 
@@ -69,10 +74,12 @@ def sign_session(session_id: str, ttl_seconds: int = _DEFAULT_TOKEN_TTL_SECONDS)
 
 
 def verify_token(token: str) -> str | None:
-    """Проверить токен и вернуть session_id, или None если невалидный/просрочен.
+    """Проверить токен (HMAC + TTL) и вернуть session_id, или None.
 
-    Не бросает исключения — при любой ошибке возвращает None. Это позволяет
-    WebSocket-handshake всегда отвечать close(1008), а не 500.
+    Синхронный путь — НЕ проверяет существование session_id в БД.
+    Используется в местах, где нет event loop (CLI, генерация токенов).
+
+    Для WebSocket-handshake используй `verify_token_async` (B14).
     """
     import time
 
@@ -102,6 +109,33 @@ def verify_token(token: str) -> str | None:
         return session_id
     except (ValueError, UnicodeDecodeError):
         return None
+
+
+async def verify_token_async(token: str, db_session_factory=None) -> str | None:
+    """Async-вариант `verify_token` с проверкой session_id в БД (B14).
+
+    Если `db_session_factory=None` — пропускает DB-проверку (для тестов /
+    случаев когда БД ещё не поднята). Иначе загружает Session по
+    `session_id` и возвращает None, если сессия удалена.
+    """
+    from sqlalchemy import select
+
+    session_id = verify_token(token)
+    if session_id is None:
+        return None
+    if db_session_factory is None:
+        return session_id
+
+    try:
+        async with db_session_factory() as db:
+            from aqr.registry.models import Session
+            stmt = select(Session.id).where(Session.id == session_id)
+            row = (await db.execute(stmt)).first()
+            return session_id if row is not None else None
+    except Exception:
+        # Если БД недоступна — fail open (HMAC-only). Это сознательный
+        # выбор: недоступность БД не должна валить авторизацию.
+        return session_id
 
 
 def issue_default_token() -> str:

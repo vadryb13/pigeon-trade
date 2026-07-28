@@ -46,16 +46,16 @@ def with_credentials():
 
 @pytest.fixture
 def fake_litellm(monkeypatch):
-    """Мок litellm.completion — отвечает JSON в зависимости от system prompt."""
+    """Мок litellm.acompletion — отвечает JSON в зависимости от system prompt."""
     def _install(response_json: str):
         fake_resp = MagicMock()
         fake_resp.choices = [MagicMock()]
         fake_resp.choices[0].message.content = response_json
 
         fake_module = types.ModuleType("litellm")
-        fake_module.completion = MagicMock(return_value=fake_resp)
+        fake_module.acompletion = AsyncMock(return_value=fake_resp)
         monkeypatch.setitem(sys.modules, "litellm", fake_module)
-        return fake_module.completion
+        return fake_module.acompletion
 
     return _install
 

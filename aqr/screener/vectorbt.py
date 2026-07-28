@@ -13,17 +13,13 @@ Why VectorBT:
   we acknowledge it in AGENTS.md.
 
 Usage:
-    from aqr.v04.screener.vectorbt import screen_momentum
+    from aqr.screener.vectorbt import screen_momentum
     top = screen_momentum("SBER", "2022-01", "2024-12", top_n=10)
     # top = [{"fast": 8, "slow": 50, "sharpe": 2.14, ...}, ...]
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import pandas as pd
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)

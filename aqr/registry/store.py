@@ -61,17 +61,20 @@ class RegistryStore:
     ) -> list[ChatMessage]:
         """Последние сообщения сессии, отсортированы по created_at ASC.
 
+        Берём последние limit через DESC + reversed, чтобы вернуть ASC-порядок.
         Tiebreaker по id UUID гарантирует детерминированный порядок при
         одинаковом created_at (что реально при microsecond-точности Postgres).
         """
         stmt = (
             select(ChatMessage)
             .where(ChatMessage.session_id == session_id)
-            .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+            .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
             .limit(limit)
         )
         result = await self._db.execute(stmt)
-        return list(result.scalars().all())
+        rows = list(result.scalars().all())
+        rows.reverse()
+        return rows
 
     # ── Run ──────────────────────────────────────────────────
 
@@ -161,6 +164,31 @@ class RegistryStore:
         )
         result = await self._db.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_hypotheses_by_runs(
+        self, run_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[Hypothesis]]:
+        """Батч-запрос гипотез для нескольких run'ов одним SELECT.
+
+        Решает N+1 в `SessionContext.get_best_strategy` / `get_untested_combos`
+        (B11): раньше было до 21 запроса (1 для списка run'ов + 20 для
+        гипотез каждого), теперь — 2 запроса (run'ы + батч гипотез).
+
+        Returns:
+            {run_id: [Hypothesis, ...]} — для run_id без гипотез пустой список.
+        """
+        if not run_ids:
+            return {}
+        stmt = (
+            select(Hypothesis)
+            .where(Hypothesis.run_id.in_(run_ids))
+            .order_by(Hypothesis.dsr.desc().nullslast())
+        )
+        result = await self._db.execute(stmt)
+        by_run: dict[uuid.UUID, list[Hypothesis]] = {rid: [] for rid in run_ids}
+        for h in result.scalars().all():
+            by_run.setdefault(h.run_id, []).append(h)
+        return by_run
 
     # ── Semantic search через pgvector ────────────────────────
 

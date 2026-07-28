@@ -1,4 +1,11 @@
-"""SQLAlchemy-модели: Run, Hypothesis, Session."""
+"""SQLAlchemy-модели: Run, Hypothesis, Session.
+
+B17: каскадное удаление унифицировано на DB-level `ondelete="CASCADE"`
+для всех FK (Session → Run → Hypothesis, Session → ChatMessage,
+Session → SessionSettings). Это даёт атомарность на стороне Postgres
+и не зависит от ORM `cascade="all, delete-orphan"` в коде приложения.
+Менять только через миграцию Alembic (см. AGENTS.md инвариант 4).
+"""
 
 from __future__ import annotations
 
@@ -6,7 +13,7 @@ import uuid
 from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -60,7 +67,6 @@ class ChatMessage(Base):
         String(64),
         ForeignKey("sessions.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     role: Mapped[str] = mapped_column(String(16), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -69,6 +75,10 @@ class ChatMessage(Base):
     )  # node, tool_name, run_id и пр.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+    __table_args__ = (
+        Index("ix_chat_messages_session_created", "session_id", "created_at"),
     )
 
     session: Mapped[Session] = relationship(back_populates="messages")
@@ -84,7 +94,10 @@ class Run(Base):
     )
     goal: Mapped[str] = mapped_column(Text, nullable=False)
     session_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("sessions.id"), nullable=False, index=True
+        String(64),
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="done")
     summary_metrics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -107,7 +120,10 @@ class Hypothesis(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     run_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("runs.id"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     family: Mapped[str] = mapped_column(String(64), nullable=False)
     ticker: Mapped[str] = mapped_column(String(32), nullable=False)

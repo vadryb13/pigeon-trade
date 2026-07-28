@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -73,7 +72,7 @@ async def start_run(
 ) -> RunStarted:
     """Принять свободный запрос, спланировать, запустить исполнение в фоне."""
     planner = ChatPlanner()
-    plan = planner.plan(req.goal)
+    plan = await planner.plan(req.goal)
 
     # Генерируем UUID ОДИН раз — он должен совпадать в BUS и в БД (иначе FK-violation
     # при create_hypothesis в фоне). Найдено в REVIEW.md / вживую 2026-07-19.
@@ -87,7 +86,11 @@ async def start_run(
 
     executor = PipelineExecutor(BUS)
 
-    # Сохраняем run в БД как "running" с явным UUID
+    # Сохраняем run в БД как "running" с явным UUID.
+    # B16: commit() уже выполнен → run виден для новой DB-сессии, которую
+    # откроет фоновая задача в `_run_and_persist`. Без явного commit
+    # фоновая задача может стартануть раньше, чем транзакция request-handler
+    # зафиксируется, и тогда `update_run_status` никого не найдёт.
     store = RegistryStore(db)
     await store.get_or_create_session("default")
     await store.create_run(

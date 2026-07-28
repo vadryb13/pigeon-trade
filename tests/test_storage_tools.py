@@ -235,7 +235,7 @@ class TestSearchSimilarHypotheses:
         assert result[0]["similarity"] == 0.96
 
     @pytest.mark.asyncio
-    async def test_search_returns_empty_when_db_fails(self, monkeypatch):
+    async def test_search_returns_empty_when_db_fails(self, monkeypatch, with_credentials):
         from aqr import db as db_mod
         from aqr.tools import storage
         from aqr.tools import storage as storage_mod
@@ -247,8 +247,11 @@ class TestSearchSimilarHypotheses:
         monkeypatch.setattr(db_mod, "_async_session_factory", _BrokenFactory())
         monkeypatch.setattr(storage_mod, "_async_session_factory", _BrokenFactory())
 
-        result = await storage.search_similar_hypotheses(text="x", threshold=0.5)
-        assert result == []
+        import pytest
+        # Strict mode (Phase 6): search_similar_hypotheses now raises on DB failure
+        # instead of returning empty list. Bug-for-bug backwards compatibility dropped.
+        with pytest.raises(RuntimeError, match="DB down"):
+            await storage.search_similar_hypotheses(text="x", threshold=0.5)
 
     @pytest.mark.asyncio
     async def test_find_duplicates_works(

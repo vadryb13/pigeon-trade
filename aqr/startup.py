@@ -12,6 +12,9 @@
 - Если Docker доступен — `docker compose -f aqr-compose.yml up -d postgres`
   поднимает Postgres-контейнер идемпотентно. Если Docker недоступен —
   БД должна быть уже запущена (DATABASE_URL ведёт на существующий инстанс).
+
+Concurrency: docker-команды запускаются через `asyncio.to_thread` —
+`subprocess.run` блокирует event loop на 60 секунд (B7).
 """
 from __future__ import annotations
 
@@ -80,15 +83,17 @@ async def _wait_for_pg(db_url: str) -> tuple[bool, str]:
     last_err: Exception | None = None
     deadline = asyncio.get_event_loop().time() + _PG_READY_TIMEOUT
     while asyncio.get_event_loop().time() < deadline:
-        engine = create_async_engine(db_url)
+        engine = None
         try:
+            engine = create_async_engine(db_url)
             async with engine.connect() as conn:
                 await conn.execute(sqlalchemy.text("SELECT 1"))
             return True, ""
         except Exception as e:
             last_err = e
         finally:
-            await engine.dispose()
+            if engine is not None:
+                await engine.dispose()
         await asyncio.sleep(_PG_READY_INTERVAL)
     return False, f"Postgres not ready after {_PG_READY_TIMEOUT}s: {type(last_err).__name__}: {last_err}"
 
@@ -107,8 +112,10 @@ async def validate_runtime() -> dict[str, str]:
 
     if not errors:
         db_url = os.environ["DATABASE_URL"]
-        if _docker_available():
-            ok, err = _compose_up_postgres()
+        # docker-команды — синхронные; гоняем в thread-pool, чтобы не
+        # блокировать event loop FastAPI lifespan (B7).
+        if await asyncio.to_thread(_docker_available):
+            ok, err = await asyncio.to_thread(_compose_up_postgres)
             if not ok:
                 errors.append(err)
 

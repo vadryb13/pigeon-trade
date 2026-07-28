@@ -19,6 +19,7 @@ import logging
 import os
 import sys
 from datetime import UTC, datetime
+from typing import Any
 
 # Фиксированный набор полей для structured-логов
 _RESERVED_LOGRECORD_ATTRS = {
@@ -28,6 +29,27 @@ _RESERVED_LOGRECORD_ATTRS = {
     "processName", "process", "message", "asctime", "taskName",
 }
 
+# B23: ключи, которые НЕЛЬЗЯ логировать as-is. Их значения заменяются на
+# "***" в JsonFormatter, чтобы API-ключи/токены не утекали в ELK/Loki.
+_SENSITIVE_KEYS = frozenset({
+    "api_key", "apikey", "api-key",
+    "token", "access_token", "refresh_token", "bearer_token",
+    "secret", "password", "credential", "credentials",
+    "invest_token", "llm_api_key", "openai_api_key",
+    "anthropic_api_key", "gigachat_credentials",
+})
+
+
+def _redact_value(key: str, value: Any) -> Any:
+    """Заменить значение чувствительного поля на '***'."""
+    if isinstance(value, str) and value:
+        return "***"
+    if isinstance(value, (list, tuple)):
+        return "[redacted]"
+    if isinstance(value, dict):
+        return {"[redacted]": len(value)}
+    return "***"
+
 
 class JsonFormatter(logging.Formatter):
     """JSON-formatter для structured-логов.
@@ -35,6 +57,9 @@ class JsonFormatter(logging.Formatter):
     Каждый log record → одна JSON-строка с фиксированным набором полей.
     Любые `extra={...}`-аргументы из logger.info(...) добавляются как
     flat-поля на верхний уровень.
+
+    B23: значения чувствительных ключей (api_key, token, и т.п.)
+    заменяются на '***' перед записью.
     """
 
     def format(self, record: logging.LogRecord) -> str:
@@ -47,6 +72,9 @@ class JsonFormatter(logging.Formatter):
         # Доп.поля из extra=
         for key, value in record.__dict__.items():
             if key in _RESERVED_LOGRECORD_ATTRS or key.startswith("_"):
+                continue
+            if key.lower() in _SENSITIVE_KEYS:
+                payload[key] = _redact_value(key, value)
                 continue
             try:
                 json.dumps(value)

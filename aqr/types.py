@@ -48,6 +48,7 @@ class BacktestResult:
             "cpcv_std_sharpe": round(self.cpcv_std_sharpe, 3),
             "max_drawdown": round(self.max_drawdown, 3),
             "n_trades": self.n_trades,
+            "daily_returns": self.daily_returns,
         }
 
 

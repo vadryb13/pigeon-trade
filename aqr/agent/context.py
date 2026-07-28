@@ -79,16 +79,20 @@ class SessionContext:
             async with _async_session_factory() as db:
                 store = RegistryStore(db)
                 runs = await store.list_runs_by_session(self.session_id, limit=20)
+                if not runs:
+                    return None
+                # B11: один батч-запрос вместо N+1.
+                goals_map = {r.id: r.goal for r in runs}
+                by_run = await store.list_hypotheses_by_runs([r.id for r in runs])
                 best_hyp = None
                 best_dsr = -999.0
-                for run in runs:
-                    hyps = await store.list_hypotheses_by_run(run.id)
+                for run_id, hyps in by_run.items():
                     for h in hyps:
-                        if h.dsr and h.dsr > best_dsr:
+                        if h.dsr is not None and h.dsr > best_dsr:
                             best_dsr = h.dsr
                             best_hyp = {
-                                "run_id": str(run.id),
-                                "goal": run.goal,
+                                "run_id": str(run_id),
+                                "goal": goals_map.get(run_id, ""),
                                 "family": h.family,
                                 "ticker": h.ticker,
                                 "params": h.config_json,
@@ -110,13 +114,16 @@ class SessionContext:
             async with _async_session_factory() as db:
                 store = RegistryStore(db)
                 runs = await store.list_runs_by_session(self.session_id, limit=50)
+                if not runs:
+                    return []
 
                 all_families = {"momentum", "mean_reversion", "breakout", "volatility"}
                 tested: set[tuple[str, str]] = set()
                 tested_tickers: set[str] = set()
 
-                for run in runs:
-                    hyps = await store.list_hypotheses_by_run(run.id)
+                # B11: один батч-запрос вместо N+1.
+                by_run = await store.list_hypotheses_by_runs([r.id for r in runs])
+                for hyps in by_run.values():
                     for h in hyps:
                         tested.add((h.family, h.ticker))
                         tested_tickers.add(h.ticker)

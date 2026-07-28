@@ -30,6 +30,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from aqr import __version__, tasks
+from aqr.api.routes import router as v04_router
 from aqr.chat import chat_router
 from aqr.chat.web import router as chat_web_router
 from aqr.logging_config import setup_logging
@@ -52,7 +53,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="AQR",
-    description="Thin pipeline: natural-language goal -> validated hypotheses on MOEX via T-Invest",
+    description="Thin pipeline: natural-language goal -> validated hypotheses via T-Invest",
     version=__version__,
     lifespan=lifespan,
 )
@@ -76,6 +77,7 @@ app.add_middleware(
 app.include_router(pipeline_router)
 app.include_router(chat_router)
 app.include_router(chat_web_router)
+app.include_router(v04_router)
 
 
 @app.get("/health")

@@ -35,11 +35,11 @@ class ResearchPlan:
         return json.dumps(asdict(self), ensure_ascii=False, indent=2)
 
 
-PLANNER_SYSTEM = """Ты руководитель quant-исследовательской команды на MOEX (Московская биржа).
+PLANNER_SYSTEM = """Ты руководитель quant-исследовательской команды на фондовом рынке.
 Пользователь ставит цель на естественном языке. Ты превращаешь её в исполнимый JSON-план.
 
 Правила:
-- tickers: список тикеров MOEX (SBER, GAZP, LKOH и т.д.). Если пользователь сказал "голубые фишки" — SBER, GAZP, LKOH, GMKN, ROSN, TATN. Если "металлурги" — CHMF, NLMK, MAGN, PLZL, GMKN. Если конкретики нет — SBER, GAZP, LKOH.
+- tickers: список тикеров (российские SBER, GAZP, LKOH и т.д.). Если пользователь сказал "голубые фишки" — SBER, GAZP, LKOH, GMKN, ROSN, TATN. Если "металлурги" — CHMF, NLMK, MAGN, PLZL, GMKN. Если конкретики нет — SBER, GAZP, LKOH.
 - timeframe: D1 (день, по умолчанию) | H1 (час) | M60
 - start_date / end_date: формат YYYY-MM-DD. По умолчанию последние 2 года.
 - hypothesis_families: подмножество [momentum, mean_reversion, breakout, volatility]
@@ -60,10 +60,10 @@ class ChatPlanner:
     def __init__(self, model: str | None = None):
         self.model = model or os.environ.get("AQR_LLM_MODEL")
 
-    def plan(self, user_goal: str) -> ResearchPlan:
-        return self._llm_plan(user_goal)
+    async def plan(self, user_goal: str) -> ResearchPlan:
+        return await self._llm_plan(user_goal)
 
-    def _llm_plan(self, user_goal: str) -> ResearchPlan:
+    async def _llm_plan(self, user_goal: str) -> ResearchPlan:
         """Зовёт LLM с credentials активной сессии. Raise на любой ошибке."""
         from ..agent.context import current_credentials
 
@@ -74,23 +74,42 @@ class ChatPlanner:
                 "Open /chat/{token}/settings and enter credentials."
             )
 
-        # litellm подхватывает ANTHROPIC_API_KEY / OPENAI_API_KEY /
-        # GIGACHAT_CREDENTIALS из env. Прокидываем per-session через
-        # временный override env только на время вызова.
-        from ..llm_env import llm_credentials_env
+        # Сериализуем env-override через asyncio.Lock — иначе concurrent
+        # asyncio.gather-вызовы портят env друг другу в `finally` (B4).
+        from ..llm_env import acquire_llm_env_lock
 
-        with llm_credentials_env(creds):
-            import litellm
+        async with await acquire_llm_env_lock() as make_env:
+            with make_env(creds):
+                import litellm
 
-            resp = litellm.completion(
-                model=creds.llm_model,
-                messages=[
-                    {"role": "system", "content": PLANNER_SYSTEM},
-                    {"role": "user", "content": user_goal},
-                ],
-                response_format={"type": "json_object"},
-            )
-        data = json.loads(resp.choices[0].message.content)
+                resp = await litellm.acompletion(
+                    model=creds.llm_model,
+                    messages=[
+                        {"role": "system", "content": PLANNER_SYSTEM},
+                        {"role": "user", "content": user_goal},
+                    ],
+                    response_format={"type": "json_object"},
+                )
+        if not resp.choices:
+            raise RuntimeError("LLM returned no choices for plan_research")
+        content = resp.choices[0].message.content
+        if not content:
+            raise RuntimeError("LLM returned empty content for plan_research")
+        # Strip markdown code fences if present
+        content = content.strip()
+        if content.startswith("```"):
+            lines = content.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            content = "\n".join(lines)
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"LLM returned non-JSON response for plan_research: {e}"
+            ) from e
         return self._plan_from_dict(user_goal, data)
 
     def _plan_from_dict(self, goal: str, data: dict[str, Any]) -> ResearchPlan:

@@ -9,11 +9,32 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import math
 import time
-import uuid
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, field
+from datetime import date, datetime
 from typing import Any
+
+
+def _event_default(o: Any) -> Any:
+    """Строгий JSON encoder для Event (B13).
+
+    Поддерживает только известные безопасные типы. Любой другой объект
+    (numpy scalar, custom dataclass без .to_dict, set, и т.п.) → TypeError.
+    Раньше `default=str` молча сериализовал всё в repr, маскируя баги.
+    """
+    if isinstance(o, (datetime, date)):
+        return o.isoformat()
+    if isinstance(o, float) and (math.isnan(o) or math.isinf(o)):
+        # SSE-клиенты не любят NaN — превращаем в null с явным флагом.
+        return None
+    if isinstance(o, (str, int, bool, type(None), list, dict)):
+        return o
+    raise TypeError(
+        f"Event JSON encoder: unsupported type {type(o).__name__}; "
+        "convert explicitly before publishing."
+    )
 
 
 @dataclass
@@ -22,13 +43,13 @@ class Event:
 
     run_id: str
     kind: str          # planning | data | generating | backtesting | validating | insight | done | error
-    stage: str         # человекочитаемая стадия ("Загружаю MOEX SBER")
+    stage: str         # человекочитаемая стадия ("Загружаю SBER")
     message: str = ""  # подробность
     data: dict[str, Any] = field(default_factory=dict)
     ts: float = field(default_factory=time.time)
 
     def to_json(self) -> str:
-        return json.dumps(asdict(self), ensure_ascii=False, default=str)
+        return json.dumps(asdict(self), ensure_ascii=False, default=_event_default)
 
 
 class EventBus:
@@ -38,42 +59,50 @@ class EventBus:
     Каждый run имеет:
     - список подписчиков (asyncio.Queue)
     - историю событий (для догоняющих подписчиков и финального отчёта)
+
+    Concurrency: все мутации (`publish`, `subscribe`) защищены
+    `_lock` (asyncio.Lock). Без лока два concurrent pipeline-run'а могут
+    потерять подписчика или испортить `_done` (B6).
     """
 
     def __init__(self):
         self._history: dict[str, list[Event]] = {}
         self._subscribers: dict[str, list[asyncio.Queue]] = {}
         self._done: dict[str, asyncio.Event] = {}
-
-    def new_run(self) -> str:
-        run_id = str(uuid.uuid4())
-        self._history[run_id] = []
-        self._subscribers[run_id] = []
-        self._done[run_id] = asyncio.Event()
-        return run_id
+        self._lock = asyncio.Lock()
 
     async def publish(self, event: Event) -> None:
-        self._history.setdefault(event.run_id, []).append(event)
-        for q in self._subscribers.get(event.run_id, []):
-            with contextlib.suppress(asyncio.QueueFull):
-                q.put_nowait(event)
-        if event.kind in ("done", "error"):
-            done = self._done.get(event.run_id)
-            if done:
-                done.set()
+        # Fast-path без лока для чтения/апдейта dict.setdefault-append.
+        # asyncio event loop — single-threaded, поэтому list.append атомарен.
+        # Лок нужен ТОЛЬКО для атомарного "append + fan-out subscribers".
+        # В однопоточном asyncio race возможен между проверкой длины
+        # subscribers и put_nowait (если кто-то делает subscribe между
+        # ними и вставит "тихий" хвост). Поэтому лочим.
+        async with self._lock:
+            self._history.setdefault(event.run_id, []).append(event)
+            for q in self._subscribers.get(event.run_id, []):
+                with contextlib.suppress(asyncio.QueueFull):
+                    q.put_nowait(event)
+            if event.kind in ("done", "error"):
+                done = self._done.get(event.run_id)
+                if done:
+                    done.set()
 
     def history(self, run_id: str) -> list[Event]:
+        # Read-only snapshot — атомарно под GIL.
         return list(self._history.get(run_id, []))
 
     async def subscribe(self, run_id: str) -> AsyncIterator[Event]:
         """SSE-подписка. Догоняет историю и стримит новое до события 'done'/'error'."""
         q: asyncio.Queue = asyncio.Queue(maxsize=1024)
-        self._subscribers.setdefault(run_id, []).append(q)
-        try:
-            # 1. Догнать историю
-            for ev in list(self._history.get(run_id, [])):
-                yield ev
+        async with self._lock:
+            self._subscribers.setdefault(run_id, []).append(q)
+            history_snapshot = list(self._history.get(run_id, []))
             done = self._done.get(run_id)
+        try:
+            # 1. Догнать историю (снимок взят под локом)
+            for ev in history_snapshot:
+                yield ev
             if done and done.is_set():
                 return
             # 2. Ждать новых
@@ -87,9 +116,10 @@ class EventBus:
                 if ev.kind in ("done", "error"):
                     return
         finally:
-            subs = self._subscribers.get(run_id, [])
-            if q in subs:
-                subs.remove(q)
+            async with self._lock:
+                subs = self._subscribers.get(run_id, [])
+                if q in subs:
+                    subs.remove(q)
 
 
 # Глобальная шина для процесса

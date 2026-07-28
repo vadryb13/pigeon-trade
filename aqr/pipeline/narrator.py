@@ -29,12 +29,12 @@ class Narrator:
     def __init__(self, model: str | None = None):
         self.model = model or os.environ.get("AQR_LLM_MODEL")
 
-    def narrate(self, result: PipelineResult) -> str:
-        return self._llm_narrate(result)
+    async def narrate(self, result: PipelineResult) -> str:
+        return await self._llm_narrate(result)
 
-    def _llm_narrate(self, result: PipelineResult) -> str:
+    async def _llm_narrate(self, result: PipelineResult) -> str:
         from ..agent.context import current_credentials
-        from ..llm_env import llm_credentials_env
+        from ..llm_env import acquire_llm_env_lock
 
         creds = current_credentials()
         if creds is None:
@@ -53,14 +53,20 @@ class Narrator:
             "top": [r.to_dict() for r in result.top],
             "elapsed_seconds": result.elapsed_seconds,
         }
-        with llm_credentials_env(creds):
-            import litellm
+        async with await acquire_llm_env_lock() as make_env:
+            with make_env(creds):
+                import litellm
 
-            resp = litellm.completion(
-                model=creds.llm_model,
-                messages=[
-                    {"role": "system", "content": NARRATOR_SYSTEM},
-                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-                ],
-            )
-        return resp.choices[0].message.content.strip()
+                resp = await litellm.acompletion(
+                    model=creds.llm_model,
+                    messages=[
+                        {"role": "system", "content": NARRATOR_SYSTEM},
+                        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                    ],
+                )
+        if not resp.choices:
+            raise RuntimeError("LLM returned no choices for narrate")
+        content = resp.choices[0].message.content
+        if content is None:
+            raise RuntimeError("LLM returned empty content for narrate")
+        return content.strip()

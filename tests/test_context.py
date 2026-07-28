@@ -98,7 +98,10 @@ class TestGetBestStrategy:
         hyps_b = [_FakeHyp(dsr=0.95, sharpe=1.5, family="mean_reversion", ticker="GAZP")]
 
         mock_db.list_runs_by_session = AsyncMock(return_value=[run_a, run_b])
-        mock_db.list_hypotheses_by_run = AsyncMock(side_effect=[hyps_a, hyps_b])
+        # B11: батч-метод возвращает dict[run_id, list[Hypothesis]].
+        mock_db.list_hypotheses_by_runs = AsyncMock(
+            return_value={run_a.id: hyps_a, run_b.id: hyps_b}
+        )
 
         ctx = SessionContext("sess-1")
         best = await ctx.get_best_strategy()
@@ -135,7 +138,8 @@ class TestGetUntestedCombos:
             _FakeHyp(family="volatility", ticker="SBER"),
         ]
         mock_db.list_runs_by_session = AsyncMock(return_value=[run])
-        mock_db.list_hypotheses_by_run = AsyncMock(return_value=hyps)
+        # B11: батч-метод.
+        mock_db.list_hypotheses_by_runs = AsyncMock(return_value={run.id: hyps})
 
         ctx = SessionContext("sess-1")
         suggestions = await ctx.get_untested_combos()
@@ -174,7 +178,7 @@ class TestBuildContextPrompt:
         })
         hyp = _FakeHyp(family="momentum", ticker="SBER", dsr=0.92, sharpe=1.2)
         mock_db.list_runs_by_session = AsyncMock(return_value=[run])
-        mock_db.list_hypotheses_by_run = AsyncMock(return_value=[hyp])
+        mock_db.list_hypotheses_by_runs = AsyncMock(return_value={run.id: [hyp]})
 
         ctx = SessionContext("sess-1")
         prompt = await ctx.build_context_prompt()
@@ -193,7 +197,7 @@ class TestBuildContextPrompt:
         run = _FakeRun()
         hyps = [_FakeHyp(family="momentum", ticker="SBER")]
         mock_db.list_runs_by_session = AsyncMock(return_value=[run])
-        mock_db.list_hypotheses_by_run = AsyncMock(return_value=hyps)
+        mock_db.list_hypotheses_by_runs = AsyncMock(return_value={run.id: hyps})
 
         ctx = SessionContext("sess")
         prompt = await ctx.build_context_prompt()

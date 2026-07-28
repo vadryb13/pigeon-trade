@@ -1,4 +1,4 @@
-"""T-Invest gRPC adapter (замена MOEXAdapter)."""
+"""T-Invest gRPC adapter."""
 
 from .ohlcv_cache import OhlcvCache
 from .tinvest import INTERVAL_MAP, TInvestAdapter

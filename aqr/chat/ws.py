@@ -33,10 +33,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from aqr.agent.context import reset_credentials, set_credentials
 from aqr.agent.graph import _msg_content, _msg_role, get_agent
-from aqr.auth import verify_token
+from aqr.auth import verify_token, verify_token_async
 from aqr.crypto import decrypt_str
 from aqr.db import _async_session_factory
-from aqr.registry import DecryptedSettings, RegistryStore, SessionSettings
+from aqr.registry import DecryptedSettings, RegistryStore
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ async def chat_ws(websocket: WebSocket, token: str):
         {type: "resume"} — отдать историю
         {type: "ping"} — keepalive
     """
-    session_id = verify_token(token)
+    session_id = await verify_token_async(token, _async_session_factory)
     if session_id is None:
         await websocket.close(code=1008, reason="invalid token")
         return
@@ -243,7 +243,18 @@ async def _run_agent_for_session(
 
     cred_token = set_credentials(credentials)
     try:
-        result = await _run_agent_inner(websocket, session_id, message)
+        # Build session context prompt (same as graph.py:run_agent)
+        session_context_prompt = ""
+        if credentials.llm_api_key:
+            try:
+                from aqr.agent.context import SessionContext
+                session_context_prompt = await SessionContext(
+                    session_id,
+                ).build_context_prompt()
+            except Exception:
+                pass
+
+        result = await _run_agent_inner(websocket, session_id, message, session_context_prompt)
     finally:
         reset_credentials(cred_token)
     return result  # noqa: F706 — explicit for type checker
@@ -253,6 +264,7 @@ async def _run_agent_inner(
     websocket: WebSocket,
     session_id: str,
     message: str,
+    session_context_prompt: str = "",
 ) -> None:
     """Тело runner'а — обёрнуто в ContextVar lifecycle в _run_agent_for_session."""
     t0 = time.time()
@@ -267,7 +279,7 @@ async def _run_agent_inner(
         "pbo": None,
         "insights": None,
         "narrative": None,
-        "session_context_prompt": "",
+        "session_context_prompt": session_context_prompt,
         "step": "",
         "error": None,
         "elapsed_seconds": 0.0,
@@ -277,6 +289,7 @@ async def _run_agent_inner(
 
     try:
         agent = get_agent()
+        last_state = initial_state  # гарантируем что определён
         try:
             async for ev in agent.astream(initial_state, stream_mode="values"):
                 if not isinstance(ev, dict):

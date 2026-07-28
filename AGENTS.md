@@ -77,6 +77,7 @@ aqr/
   pipeline/        # оркестратор: planner, executor, narrator, SSE-events, FastAPI роуты
   tools/           # Tool Layer (13 инструментов)
   agent/           # LangGraph граф + SessionContext + run_agent
+  agents/          # 5-role team: Editor/Browser/Analyst/Reviewer/Writer + orchestrator
   chat/            # WS /chat/{token} + Web UI
     ws.py          # WebSocket endpoint и контракт
     web.py         # GET /chat (HTML) + GET /chat/new (token)
@@ -86,11 +87,15 @@ aqr/
   data/
     tinvest.py     # TInvestAdapter (gRPC, sandbox, lazy FIGI cache)
     ohlcv_cache.py # DuckDB-кэш OHLCV (lazy duckdb import)
+  screener/        # VectorBT-скринер (screen_momentum — SMA-crossover)
+  executor/        # NautilusTrader-бэктесты (commission, slippage)
+  mcp/             # T-Invest MCP сервер (JSON-RPC для LLM-агентов)
+  api/             # v0.4 API endpoints (/team/run, /executor/nautilus, /mcp/rpc)
   logging_config.py # JsonFormatter + log_tool_call
   auth.py          # HMAC-подписанные session_id-токены (SEC-1)
   startup.py       # validate_runtime() — обязательные env + доступность зависимостей
   tasks.py         # Retention set для фоновых asyncio-задач (PERF-1)
-  main.py          # FastAPI app: /health, /health/ready, /pipeline/*, /chat/*, /chat
+  main.py          # FastAPI app: /health, /health/ready, /pipeline/*, /chat/*, /chat, /team/*, /executor/*, /mcp/*
 alembic/versions/  # миграции: fcb396c4088d (initial) + a1b2c3d4e5f6 (chat_messages)
 tests/             # тесты (см. ниже)
 ```
@@ -150,6 +155,12 @@ Auth: `WS /chat/{token}` где `token` — это HMAC-подпись `exp:sess
 Первый вызов `candles("SBER", ...)` → gRPC `InstrumentsService.get_instrument_by_ticker`, кэш в `cls._figi_cache`. Неизвестный тикер → `raise ValueError`. Если нужно сбросить — `TInvestAdapter.clear_figi_cache()`.
 
 Тесты патчат через `monkeypatch.setattr("t_tech.invest.Client", _FakeClient)` или оборачивают `TInvestAdapter.candles` напрямую.
+
+### 5-agent team orchestrator использует `asyncio.gather`
+
+В `aqr/v04/agents/orchestrator.py:run_team` analyst-задачи запускаются параллельно через `asyncio.gather(*analyst_tasks)` — по одному task на тикер. Browser-task запускается как `asyncio.create_task` параллельно с analyst-ами.
+
+Ошибки в отдельных task-ах не валят весь пайплайн: `return_exceptions=True` + проверка `isinstance(ar, Exception)`. Все ошибки собираются в `TeamResult.agent_errors`.
 
 ### `backtest_one` принимает `cpcv_*` и `embargo_pct` параметры
 
@@ -295,6 +306,8 @@ export SSL_TBANK_VERIFY=True
 - `test_api_routes.py` — FastAPI роуты + `_run_and_persist`
 - `test_auth.py` — HMAC sign/verify round-trip + edge cases
 - `test_startup.py` — validate_runtime() отказ при отсутствии env
+- `test_v04_screener.py` — VectorBT screener: 6 тестов (import, sorting, top-N, constraint, credentials)
+- `test_v04_agents.py` — 5-agent team: 24 теста (каждый агент изолированно + orchestrator e2e с моками)
 
 ### Паттерн моков
 
@@ -320,9 +333,9 @@ export SSL_TBANK_VERIFY=True
 - **Web UI не покрыт browser-тестами.** Vanilla JS — рендеринг и WebSocket-клиент тестируются вручную. CI покрывает только серверные endpoints.
 - **Sandbox vs prod** — `INVEST_SANDBOX=1` по умолчанию. Sandbox имеет ограниченный universe инструментов и тестовые счета; реальные FIGI/свечи только в production-токене.
 
-## Что уже сделано (v0.3)
+## Что уже сделано (v0.3 → v0.4)
 
-Работает end-to-end в strict-режиме (без fallback):
+### v0.3 (strict-mode, работает end-to-end)
 
 - ✅ **T-Invest gRPC**: `aqr/data/tinvest.py` — `TInvestAdapter` с lazy FIGI cache, 7 интервалов (1m/5m/15m/H1/D1/W/M), sandbox по дефолту.
 - ✅ **Validation**: DSR (Bailey-López de Prado), CPCV, PBO в `aqr/validation/`.
@@ -331,43 +344,44 @@ export SSL_TBANK_VERIFY=True
 - ✅ **Storage**: Postgres + pgvector, `session_settings` с Fernet-encrypted credentials (HKDF от `AQR_SESSION_SECRET`), `chat_messages` для WS-истории.
 - ✅ **Chat**: WS `/chat/{token}` с HMAC auth, per-session credentials через ContextVar (`/chat/{token}/settings` форма), vanilla-JS UI.
 - ✅ **Startup validation**: `aqr/startup.py::validate_runtime()` — auto-provision Postgres-контейнера + обязательные env.
-- ✅ **Tests**: 239 passed, coverage 83% (≥80% gate).
+- ✅ **Tests**: 269 passed, coverage ≥83% (≥80% gate).
 
-Слабые места v0.3 (обоснование для v0.4):
-- Агент — линейный, без параллелизма и специализации.
-- Скрининг гипотез — медленный (один backtest за раз через executor).
-- Код стратегий — параметризованные шаблоны в `hypotheses.py`, не выразительный Python для сложных сигналов.
-- Execution model — упрощённый (без реалистичного моделирования комиссий/slippage/частичного исполнения).
+### v0.4 (новые компоненты)
+
+- ✅ **VectorBT screener**: `aqr/screener/vectorbt.py::screen_momentum` — grid-search SMA-crossover параметров (Numba JIT, lazy vectorbt import). 6 тестов.
+- ✅ **5-agent team**: `aqr/agents/` — Editor → Browser + Analyst (parallel per ticker) → Reviewer → Writer. Orchestrator с `asyncio.gather`. 24 теста, 8 файлов.
+- ✅ **NautilusTrader executor**: `aqr/executor/nautilus.py::execute_with_slippage` — возвращает `BacktestResult` dataclass с realistic execution (комиссии 0.05%, slippage 1 tick). Graceful fallback без nautilus_trader. 7 тестов.
+- ✅ **T-Invest MCP Server**: `aqr/mcp/` — JSON-RPC 2.0 интерфейс (protocol, server, client). Методы: `get_candles`, `resolve_figi`, `search_similar`, `find_duplicates`. 15 тестов.
+- ✅ **API endpoints**: `aqr/api/routes.py` — `POST /team/run`, `POST /executor/nautilus`, `POST /mcp/rpc`. Подключены в `aqr/main.py`. 4 теста.
+
+Слабые места (дальнейшие этапы):
+- Нет slash-команд `/team`, `/screener`, `/executor` в WebSocket.
+- NautilusTrader BacktestEngine интеграция — сейчас native fallback (нужен установленный пакет).
 
 ## План переделывания (v0.4 → v0.5)
 
-| Компонент | Рекомендация | Обоснование |
-|---|---|---|
-| Быстрый скрининг идей | **VectorBT** (open-source, с осознанием что развитие остановлено) | Скорость итераций для проверки «есть ли edge». Numba-ускоренные бэктесты на 1000+ параметров за минуты, а не часы. Подходит для фазы discovery; для production execution — следующий уровень. |
-| Валидация отобранных стратегий | **NautilusTrader** | Реалистичное моделирование исполнения перед paper trading: комиссии, slippage, частичное исполнение, latency, order book. Event-driven backtester на Rust-ядре. Переход от «сигнал даёт Sharpe» → «сигнал даёт Sharpe после реалистичных издержек». |
-| Оркестрация LLM-агентов | **LangGraph с ролями** Researcher/Coder/Reviewer/Writer (расширение существующего `aqr/agent/`) | Полный контроль над данными (T-Invest), параллельный research гипотез через `asyncio.gather`. Заменяет линейный v0.3-граф на иерархию: Editor → {Browser, Analyst} → Reviewer → Writer. |
-| Доступ к брокерским данным | **T-Invest MCP Server + T-Bank Invest API** | Готовая интеграция без написания коннекторов с нуля. MCP-протокол даёт стандартизованный интерфейс для LLM-агентов (tools/JSON-RPC). Не зависит от внутреннего gRPC-SDK. |
+| Компонент | Статус | Рекомендация | Обоснование |
+|---|---|---|---|
+| Быстрый скрининг идей | ✅ v0.4 | **VectorBT** (open-source, с осознанием что развитие остановлено) | Скорость итераций для проверки «есть ли edge». Numba-ускоренные бэктесты на 1000+ параметров за минуты. |
+| Оркестрация LLM-агентов | ✅ v0.4 | **5-role team** (Editor/Browser/Analyst/Reviewer/Writer) | asyncio.gather, параллельный research, реактивная архитектура. |
+| Валидация отобранных стратегий | 🚧 **следующий** | **NautilusTrader** | Реалистичное моделирование исполнения перед paper trading: комиссии, slippage, частичное исполнение, order book. |
+| Доступ к брокерским данным | 🚧 **следующий** | **T-Invest MCP Server** | Стандартизованный JSON-RPC интерфейс для LLM-агентов. |
+| API endpoints | 🚧 **следующий** | **FastAPI роуты** | `POST /team/run`, `POST /executor/nautilus`, `POST /mcp/rpc`. |
+| WebSocket slash-команды | 📅 **Phase 2** | `/team`, `/screener`, `/executor` | Интеграция v0.4 в Web UI. |
 
-### Стратегия миграции
+### Следующие этапы
 
-v0.3 продолжает работать параллельно (backward compat). Новые компоненты добавляются в `aqr/v04/`:
+1. **WebSocket slash-команды** (Phase 2 — после UI)
+   - `/team {goal}` → `run_team(goal)` вместо `run_agent`
+   - `/screener {ticker}` → `screen_momentum(ticker)`
+   - `/executor {hypothesis}` → `execute_with_slippage(...)`
 
-```
-aqr/v04/
-  screener/        # VectorBT-обёртки (Phase 1: discovery)
-  executor/        # NautilusTrader-бэктесты (Phase 2: validation)
-  agents/          # 5 ролей через LangGraph (Phase 3: orchestration)
-  mcp/             # T-Invest MCP client (Phase 4: data layer)
-```
+2. **NautilusTrader BacktestEngine** — полноценная интеграция (сейчас native fallback)
+   - Event-driven через BacktestEngine
+   - Комиссии, slippage, частичное исполнение
+   - `pip install nautilus_trader`
 
-WebSocket получает slash-команды `/run` (старый pipeline) и `/team` (новый orchestrator с 5 ролями). Settings-форма расширяется чекбоксом «use team agents» (default off — для backward compat).
-
-### Порядок реализации
-
-1. **VectorBT-screener** — отдельный endpoint `POST /screener/vectorbt`, возвращает топ-N параметров по Sharpe. Без замены существующего flow.
-2. **NautilusTrader-executor** — `aqr/v04/executor/` для paper-trading валидации топ-стратегий из v0.3 pipeline. Опциональный шаг перед реальной торговлей.
-3. **5-agent team** — `aqr/v04/agents/` с LangGraph orchestrator, параллельный research/analysis, доступен через `/team`.
-4. **T-Invest MCP integration** — последним, после стабилизации agent API.
+3. **Тесты Web UI** — browser-тесты для chat.html (vanilla JS WebSocket-клиент)
 
 ## Стиль
 

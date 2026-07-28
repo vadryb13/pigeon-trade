@@ -90,7 +90,7 @@ class AgentState(TypedDict, total=False):
 
 # ── System prompt ───────────────────────────────────────────────
 
-ROUTER_SYSTEM = """Ты — ассистент quant-исследователя на MOEX. Твоя задача — провести пользователя
+ROUTER_SYSTEM = """Ты — ассистент quant-исследователя. Твоя задача — провести пользователя
 через исследование: понять цель, спланировать, загрузить данные, проверить гипотезы,
 провалидировать и дать отчёт.
 
@@ -121,7 +121,7 @@ ROUTER_SYSTEM = """Ты — ассистент quant-исследователя 
 6. Не придумывай действий, которых нет в списке.
 """
 
-RESPOND_SYSTEM = """Ты — ассистент quant-исследователя на MOEX. Ты помогаешь анализировать
+RESPOND_SYSTEM = """Ты — ассистент quant-исследователя. Ты помогаешь анализировать
 результаты проверки торговых гипотез. Отвечай по-русски, кратко, по делу.
 
 У тебя есть:
@@ -252,7 +252,9 @@ async def narrate_node(state: AgentState) -> dict[str, Any]:
         )
         insights.extend(extra)
     except Exception:
-        pass
+        # B20: LLM-review — дополнительная фича. Логируем, но не валим граф.
+        import logging
+        logging.getLogger(__name__).exception("review_insights failed")
 
     # Нарратив
     nar_tool = tool_registry.get("narrate")
@@ -335,9 +337,16 @@ async def _llm_route(state: AgentState) -> str:
     Используется после первого ответа для обработки follow-up вопросов.
     Возвращает узел для следующего шага.
     """
-    # Если нет LLM — детерминистический роутер
+    # Если нет LLM — детерминистический роутер.
+    # Проверяем и env, и per-session credentials (ContextVar) для WS-режима.
+    if not _has_llm_key():
+        return _deterministic_route(state)
     model = os.environ.get("AQR_LLM_MODEL")
-    if not model or not _has_llm_key():
+    if not model:
+        from .context import current_credentials
+        creds = current_credentials()
+        model = creds.llm_model if creds else ""
+    if not model:
         return _deterministic_route(state)
 
     messages = state.get("messages", [])
@@ -371,7 +380,7 @@ async def _llm_route(state: AgentState) -> str:
 
     try:
         import litellm
-        resp = litellm.completion(
+        resp = await litellm.acompletion(
             model=model,
             messages=[
                 {"role": "system", "content": system_content},
@@ -391,14 +400,28 @@ async def _llm_route(state: AgentState) -> str:
                 return END
             return action
     except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "LLM routing failed, falling back to deterministic", exc_info=True
+        )
         pass
 
     return _deterministic_route(state)
 
 
 def _has_llm_key() -> bool:
+    """Check if any LLM credentials are available (env or per-session ContextVar)."""
     keys = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIGACHAT_CREDENTIALS")
-    return any(os.environ.get(k) for k in keys)
+    if any(os.environ.get(k) for k in keys):
+        return True
+    try:
+        from .context import current_credentials
+        creds = current_credentials()
+        if creds and creds.llm_api_key:
+            return True
+    except Exception:
+        pass
+    return False
 
 
 async def route_node(state: AgentState) -> dict[str, Any]:
@@ -415,10 +438,12 @@ async def route_node(state: AgentState) -> dict[str, Any]:
                     "results": None, "pbo": None, "insights": None,
                     "narrative": None, "step": "", "error": None,
                 })
+                return {"step": ""}
 
     # Если состояние "done" и пришло новое сообщение — начинаем заново
+    # Возвращаем шаг явно — мутация state dict`а не влияет на граф
     if state.get("step") == "done":
-        state["step"] = ""
+        return {"step": ""}
 
     return {}
 

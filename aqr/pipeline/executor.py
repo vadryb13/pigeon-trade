@@ -2,7 +2,7 @@
 PipelineExecutor — исполняет ResearchPlan шаг за шагом, публикуя события в EventBus.
 
 Шаги:
-1. Загрузить данные (MOEX или synthetic-фолбэк)
+1. Загрузить данные через T-Invest gRPC (read-through DuckDB cache)
 2. Сгенерировать N гипотез (детерминистично из плана)
 3. Для каждой: бэктест + Deflated Sharpe + CPCV + PBO по портфелю
 4. Ранжировать, оставить топ
@@ -16,7 +16,6 @@ import time
 from dataclasses import asdict
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from ..types import BacktestResult, PipelineResult
@@ -25,11 +24,6 @@ from .hypotheses import HypothesisSpec
 from .planner import ResearchPlan
 
 _logger = logging.getLogger(__name__)
-
-# Валидация из существующих модулей
-from ..validation.cpcv import CombinatorialPurgedCV
-from ..validation.deflated_sharpe import deflated_sharpe_ratio
-from ..validation.pbo import probability_of_backtest_overfitting
 
 
 class PipelineExecutor:
@@ -150,7 +144,9 @@ class PipelineExecutor:
                 for obs in extra:
                     await self._emit(run_id, "insight", "Аналитик", obs, {"source": "llm"})
             except Exception:
-                pass
+                # LLM-review — дополнительная фича. Если упало, эмитим warning,
+                # но не валим pipeline (детерминистичных инсайтов достаточно).
+                _logger.exception("review_insights failed")
 
             # Нарратив — через инструмент narrate
             nar_tool = tool_registry.get("narrate")
@@ -168,7 +164,16 @@ class PipelineExecutor:
                     elapsed_seconds=result.elapsed_seconds,
                 )
             except Exception as e:
-                result.narrative = f"(narrator error: {e})"
+                # B12: явно эмитим error — клиент должен видеть, что нарратив
+                # не готов. Раньше ошибка тихо записывалась в result.narrative,
+                # и pipeline выдавал "done" с мусором в отчёте.
+                _logger.exception("narrate failed")
+                await self._emit(
+                    run_id, "error", "Нарратор",
+                    f"narrate failed: {e}",
+                    {"exception": type(e).__name__},
+                )
+                raise
 
             await self._emit(run_id, "done", "Готово",
                              f"Проверено {len(results)} гипотез, прошло DSR — {len(survived)}",
@@ -188,7 +193,7 @@ class PipelineExecutor:
         load_tool = tool_registry.get("load_prices")
         for t in plan.tickers:
             await self._emit(run_id, "data", f"Загружаю {t}",
-                             f"MOEX ISS: {plan.start_date} → {plan.end_date}")
+                             f"T-Invest: {plan.start_date} → {plan.end_date}")
 
         prices_raw = await load_tool.fn(
             tickers=plan.tickers,
@@ -198,9 +203,10 @@ class PipelineExecutor:
         )
 
         # Конвертируем list[float] → pd.Series с правильным индексом
+        # Используем freq="D" а не "B" — T-Invest D1 возвращает календарные даты
         prices: dict[str, pd.Series] = {}
         n_bars = max((len(v) for v in prices_raw.values()), default=500)
-        idx = pd.date_range(plan.start_date, periods=n_bars, freq="B")
+        idx = pd.date_range(plan.start_date, periods=n_bars, freq="D")
         for t, px_list in prices_raw.items():
             s = pd.Series(px_list, index=idx[:len(px_list)], name=t)
             prices[t] = s

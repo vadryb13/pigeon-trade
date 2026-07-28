@@ -1,4 +1,4 @@
-"""T-Invest gRPC-адаптер — замена MOEXAdapter.
+"""T-Invest gRPC-адаптер.
 
 Основан на `t-tech-investments` (https://opensource.tbank.ru/invest/invest-python).
 Lazy import `t_tech.invest` чтобы aqr.main стартовал без поднятия gRPC
@@ -8,11 +8,19 @@ Lazy import `t_tech.invest` чтобы aqr.main стартовал без под
 На любую ошибку (сеть, таймаут, неизвестный FIGI) — raise.
 
 Per-session credentials (token + sandbox) берутся из ContextVar.
+
+Concurrency: `_resolve_figi` защищён `threading.Lock` — load_prices
+гоняет несколько `adapter.candles(...)` через `asyncio.to_thread` → они
+выполняются параллельно в ThreadPoolExecutor и без лока race-ят на
+class-level `_figi_cache` (B5). В CPython dict.get/set атомарны на уровне
+GIL, но между get-проверкой и set может вклиниться другой поток, и
+тогда оба сходят в gRPC InstrumentsService.
 """
 from __future__ import annotations
 
 import os
 import sys
+import threading
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -75,6 +83,9 @@ class TInvestAdapter:
 
     # Class-level cache для ticker → FIGI. Сбрасывается через clear_figi_cache.
     _figi_cache: dict[str, str] = {}
+    # threading.Lock защищает _figi_cache от concurrent writers из
+    # asyncio.to_thread-пула (B5). Class-level — все инстансы делят один лок.
+    _figi_lock: threading.Lock = threading.Lock()
 
     def __init__(
         self,
@@ -144,19 +155,30 @@ class TInvestAdapter:
         """Lazy lookup ticker → FIGI через InstrumentsService.
 
         Результат кэшируется в class-level dict. Неизвестный тикер → ValueError.
+        Защищён `threading.Lock` от concurrent writers (B5): asyncio.to_thread
+        разносит sync-вызовы по ThreadPoolExecutor, и без лока оба потока
+        могут одновременно сходить в InstrumentsService.
         """
-        if ticker not in TInvestAdapter._figi_cache:
+        # Fast-path: cache hit без лока (dict.get — атомарный в CPython).
+        cached = TInvestAdapter._figi_cache.get(ticker)
+        if cached is not None:
+            return cached
+
+        with TInvestAdapter._figi_lock:
+            # Double-check под локом — другой поток мог уже заполнить.
+            cached = TInvestAdapter._figi_cache.get(ticker)
+            if cached is not None:
+                return cached
             with self._Client(self.token, target=self._target) as client:
                 r = client.instruments.get_instrument_by_ticker(
                     ticker=ticker,
-                    class_code="TQBR",  # MOEX shares по умолчанию
+                    class_code="TQBR",
                 )
             instruments = list(r.instruments)
             if not instruments:
                 raise ValueError(f"Unknown ticker: {ticker!r}")
             TInvestAdapter._figi_cache[ticker] = instruments[0].figi
-
-        return TInvestAdapter._figi_cache[ticker]
+            return TInvestAdapter._figi_cache[ticker]
 
     @classmethod
     def clear_figi_cache(cls) -> None:

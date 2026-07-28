@@ -77,6 +77,8 @@ registry = ToolRegistry()
 def reset_for_testing() -> None:
     """Очистить глобальный реестр. Только для тестов."""
     registry.reset()
+    from .register import _reset_registration_done
+    _reset_registration_done()
 
 
 __all__ = ["ToolSpec", "ToolRegistry", "ToolFn", "registry", "reset_for_testing"]

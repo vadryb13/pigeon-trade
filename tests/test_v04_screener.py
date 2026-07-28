@@ -1,4 +1,4 @@
-"""Тесты для aqr.v04.screener.vectorbt — fast grid-search momentum strategies.
+"""Тесты для aqr.screener.vectorbt — fast grid-search momentum strategies.
 
 VectorBT optional dep. Тесты skip если не установлен.
 """
@@ -32,16 +32,15 @@ def synthetic_prices():
 class TestVectorBTScreener:
     def test_import_succeeds(self):
         """Модуль импортируется без ошибок."""
-        from aqr.v04.screener import screen_momentum, VariantResult
+        from aqr.screener import VariantResult, screen_momentum
         assert callable(screen_momentum)
         assert VariantResult is not None
 
     def test_screen_momentum_returns_sorted_results(self, monkeypatch, synthetic_prices):
         """screen_momentum возвращает список отсортированный по Sharpe desc."""
-        from aqr.v04.screener import screen_momentum
-
         # Mock TInvestAdapter.candles чтобы не ходить в T-Invest
         from aqr.data import tinvest as tinvest_mod
+        from aqr.screener import screen_momentum
 
         class _FakeAdapter:
             def __init__(self, *a, **kw):
@@ -83,8 +82,8 @@ class TestVectorBTScreener:
 
     def test_top_n_limit_respected(self, monkeypatch, synthetic_prices):
         """top_n действительно ограничивает размер выдачи."""
-        from aqr.v04.screener import screen_momentum
         from aqr.data import tinvest as tinvest_mod
+        from aqr.screener import screen_momentum
 
         class _FakeAdapter:
             def __init__(self, *a, **kw): pass
@@ -105,8 +104,8 @@ class TestVectorBTScreener:
 
     def test_fast_less_than_slow_constraint(self, monkeypatch, synthetic_prices):
         """Constraint: fast + 5 < slow (отсекает бессмысленные)."""
-        from aqr.v04.screener import screen_momentum
         from aqr.data import tinvest as tinvest_mod
+        from aqr.screener import screen_momentum
 
         class _FakeAdapter:
             def __init__(self, *a, **kw): pass
@@ -136,16 +135,16 @@ class TestVectorBTScreener:
         # После reset() значение будет default (None)
         assert _active_credentials.get() is None
 
-        from aqr.v04.screener import screen_momentum
+        from aqr.screener import screen_momentum
         with pytest.raises(RuntimeError, match="credentials"):
             screen_momentum("SBER", "2023-01-02", "2024-12-30")
 
     def test_works_with_context_credentials(self, monkeypatch, synthetic_prices):
         """Credentials в ContextVar → screen_momentum работает."""
         from aqr.agent.context import reset_credentials, set_credentials
-        from aqr.registry import DecryptedSettings
         from aqr.data import tinvest as tinvest_mod
-        from aqr.v04.screener import screen_momentum
+        from aqr.registry import DecryptedSettings
+        from aqr.screener import screen_momentum
 
         class _FakeAdapter:
             def __init__(self, *a, **kw): pass

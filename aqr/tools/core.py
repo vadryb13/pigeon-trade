@@ -22,6 +22,11 @@ from ..validation.pbo import probability_of_backtest_overfitting
 
 logger = logging.getLogger(__name__)
 
+# B18: magic constant → именованная константа.
+# Минимальное число баров в кэше, чтобы считать ряд "полным" и не ходить в T-Invest.
+# 100 баров = ~4.5 месяца дневных данных; ниже — слишком короткий ряд для DSR/CPCV.
+MIN_CACHED_ROWS = 100
+
 # ── plan_research ───────────────────────────────────────────────
 
 async def plan_research(goal: str) -> dict[str, Any]:
@@ -32,7 +37,7 @@ async def plan_research(goal: str) -> dict[str, Any]:
     `similar_runs` и `dedup_warning` для агента.
     """
     planner = ChatPlanner()
-    plan = planner.plan(goal)
+    plan = await planner.plan(goal)
     result = asdict(plan)
 
     # Дедупликация через embedding
@@ -102,7 +107,7 @@ async def load_prices(
         df = await asyncio.to_thread(
             cache.get_cached, t, start_date, end_date, timeframe,
         )
-        if df is not None and len(df) >= 100:
+        if df is not None and len(df) >= MIN_CACHED_ROWS:
             cached_series[t] = df["close"].astype(float)
         else:
             needs_remote.append(t)
@@ -117,7 +122,7 @@ async def load_prices(
             df = await asyncio.to_thread(
                 adapter.candles, t, start_date, end_date, timeframe,
             )
-            if len(df) < 100:
+            if len(df) < MIN_CACHED_ROWS:
                 raise ValueError(f"мало данных ({len(df)} строк)")
             with contextlib.suppress(Exception):
                 cache.put_cache(t, df, timeframe)
@@ -136,7 +141,7 @@ async def load_prices(
 
 # Threshold для дневного движения, при превышении которого логируем
 # warning — типичный сигнал необработанного корпоративного события.
-# Для справки: нормальная daily-volatility на MOEX ~1-3%, даже кризисные
+# Для справки: нормальная daily-volatility на акциях ~1-3%, даже кризисные
 # дни редко превышают 10-15%. 20% — высокий порог, чтобы не спамить.
 _PIT_RETURN_THRESHOLD = 0.20
 
@@ -285,25 +290,22 @@ def _cpcv_sharpe(
     embargo_pct: float = 0.01,
 ) -> tuple[float, float]:
     """Средний OOS Sharpe по CPCV путям."""
-    try:
-        cpcv = CombinatorialPurgedCV(
-            n_splits=n_splits,
-            n_test_splits=n_test_splits,
-            embargo_pct=embargo_pct,
-        )
-        sharpes = []
-        for train_idx, test_idx in cpcv.split(ret.index):
-            if len(test_idx) < 20:
-                continue
-            s = ret.iloc[test_idx]
-            if s.std() == 0:
-                continue
-            sharpes.append(float(s.mean() / s.std() * np.sqrt(252)))
-        if not sharpes:
-            return 0.0, 0.0
-        return float(np.mean(sharpes)), float(np.std(sharpes))
-    except Exception:
+    cpcv = CombinatorialPurgedCV(
+        n_splits=n_splits,
+        n_test_splits=n_test_splits,
+        embargo_pct=embargo_pct,
+    )
+    sharpes = []
+    for train_idx, test_idx in cpcv.split(ret.index):
+        if len(test_idx) < 20:
+            continue
+        s = ret.iloc[test_idx]
+        if s.std() == 0:
+            continue
+        sharpes.append(float(s.mean() / s.std() * np.sqrt(252)))
+    if not sharpes:
         return 0.0, 0.0
+    return float(np.mean(sharpes)), float(np.std(sharpes))
 
 
 # ── validate_portfolio ──────────────────────────────────────────
@@ -332,11 +334,14 @@ async def validate_portfolio(
         return {"pbo": 0.0, "verdict": "insufficient"}
 
     M = np.array([dr[-min_len:] for dr in all_returns]).T
-    try:
-        out = probability_of_backtest_overfitting(M, n_partitions=8)
-        return {"pbo": float(out["pbo"]), "verdict": out.get("verdict", "")}
-    except Exception:
-        return {"pbo": 0.0, "verdict": "error"}
+    out = probability_of_backtest_overfitting(M, n_partitions=8)
+    # B19: require verdict — без него клиент не понимает, что делать с результатом.
+    verdict = out.get("verdict", "")
+    if not verdict:
+        raise RuntimeError(
+            f"PBO computation returned empty verdict: {dict(out)}"
+        )
+    return {"pbo": float(out["pbo"]), "verdict": verdict}
 
 
 # ── extract_insights ────────────────────────────────────────────
@@ -453,7 +458,7 @@ async def review_insights(
     )
 
     reviewer = InsightReviewer()
-    return reviewer.review(result, deterministic_insights)
+    return await reviewer.review(result, deterministic_insights)
 
 
 # ── narrate ─────────────────────────────────────────────────────
@@ -513,4 +518,4 @@ async def narrate(
     )
 
     narrator = Narrator()
-    return narrator.narrate(result)
+    return await narrator.narrate(result)

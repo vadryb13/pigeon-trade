@@ -24,6 +24,10 @@ from .storage import (
     search_similar_hypotheses,
 )
 
+# Expected tool count after registration — increment when adding tools
+_EXPECTED_TOOL_COUNT = 13
+_registration_done = False
+
 
 def register_all() -> None:
     """Зарегистрировать все инструменты в глобальном реестре.
@@ -32,8 +36,18 @@ def register_all() -> None:
     Это позволяет безопасно вызывать register_all() из нескольких точек входа
     (PipelineExecutor.run, agent/graph, тесты).
     """
-    if len(registry) >= 13:
+    global _registration_done
+    if _registration_done:
         return
+    if len(registry) >= _EXPECTED_TOOL_COUNT:
+        _registration_done = True
+        return
+
+
+def _reset_registration_done() -> None:
+    """Сбросить флаг регистрации. Только для тестов."""
+    global _registration_done
+    _registration_done = False
 
     # ── Pipeline tools ──────────────────────────────────────────
 
@@ -44,7 +58,7 @@ def register_all() -> None:
     _safe_register(ToolSpec(
         name="plan_research",
         description="Разобрать цель пользователя на русском языке в план исследования: "
-                    "тикеры MOEX, семейства гипотез, временной диапазон, количество гипотез.",
+                    "тикеры, семейства гипотез, временной диапазон, количество гипотез.",
         input_schema={
             "type": "object",
             "properties": {
@@ -58,13 +72,13 @@ def register_all() -> None:
 
     _safe_register(ToolSpec(
         name="load_prices",
-        description="Загрузить цены закрытия для списка тикеров с MOEX. "
-                    "При недоступности MOEX используется синтетический GBM.",
+        description="Загрузить дневные цены закрытия для списка тикеров через T-Invest gRPC. "
+                    "Read-through DuckDB-кэш; без fallback — ошибка пробрасывается.",
         input_schema={
             "type": "object",
             "properties": {
                 "tickers": {"type": "array", "items": {"type": "string"},
-                            "description": "Список тикеров MOEX"},
+                            "description": "Список тикеров"},
                 "start_date": {"type": "string", "description": "Дата начала YYYY-MM-DD"},
                 "end_date": {"type": "string", "description": "Дата конца YYYY-MM-DD"},
                 "timeframe": {"type": "string", "description": "D1 или H1"},
@@ -271,3 +285,5 @@ def register_all() -> None:
         fn=find_duplicates,
         category="storage",
     ))
+
+    _registration_done = True

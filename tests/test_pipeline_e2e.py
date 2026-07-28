@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import sys
 import types
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -46,18 +46,18 @@ def active_credentials(monkeypatch):
 
 @pytest.fixture
 def fake_litellm(monkeypatch):
-    """Подменяет litellm.completion фейковым."""
+    """Подменяет litellm.acompletion фейковым async-моком."""
     fake_resp = MagicMock()
     fake_resp.choices = [MagicMock()]
     fake_resp.choices[0].message.content = "{}"
     fake_module = types.ModuleType("litellm")
-    fake_module.completion = MagicMock(return_value=fake_resp)
+    fake_module.acompletion = AsyncMock(return_value=fake_resp)
     monkeypatch.setitem(sys.modules, "litellm", fake_module)
-    return fake_module.completion
+    return fake_module.acompletion
 
 
 class TestPlannerRequiresCredentials:
-    def test_raises_without_credentials(self, monkeypatch):
+    async def test_raises_without_credentials(self, monkeypatch):
         """Без active credentials → RuntimeError."""
         from aqr.agent.context import current_credentials
 
@@ -65,11 +65,11 @@ class TestPlannerRequiresCredentials:
 
         planner = ChatPlanner()
         with pytest.raises(RuntimeError, match="credentials not configured"):
-            planner.plan("проверь momentum на Сбере")
+            await planner.plan("проверь momentum на Сбере")
 
 
 class TestNarratorRequiresCredentials:
-    def test_raises_without_credentials(self, monkeypatch):
+    async def test_raises_without_credentials(self, monkeypatch):
         """Narrator без credentials → raise."""
         from aqr.agent.context import current_credentials
 
@@ -103,13 +103,14 @@ class TestNarratorRequiresCredentials:
 
         narrator = Narrator()
         with pytest.raises(RuntimeError, match="credentials not configured"):
-            narrator.narrate(result)
+            await narrator.narrate(result)
 
 
 class TestPlannerWithMockedLLM:
-    def test_parses_llm_json_response(self, active_credentials, fake_litellm, monkeypatch):
+    async def test_parses_llm_json_response(
+        self, active_credentials, fake_litellm, monkeypatch
+    ):
         """С credentials + мок LLM — план парсится из JSON-ответа."""
-        # Настраиваем мок-LLM вернуть корректный JSON
         fake_litellm.return_value.choices[0].message.content = (
             '{"tickers": ["GAZP"], "timeframe": "H1", '
             '"start_date": "2024-01-01", "end_date": "2024-12-31", '
@@ -118,20 +119,20 @@ class TestPlannerWithMockedLLM:
         )
         monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
 
-        plan = ChatPlanner().plan("тест")
+        plan = await ChatPlanner().plan("тест")
         assert plan.tickers == ["GAZP"]
         assert plan.timeframe == "H1"
         assert plan.hypothesis_families == ["breakout"]
         assert plan.n_hypotheses == 30
 
-    def test_uses_defaults_when_json_incomplete(
+    async def test_uses_defaults_when_json_incomplete(
         self, active_credentials, fake_litellm, monkeypatch
     ):
         """LLM вернул неполный JSON — дефолты применяются."""
         fake_litellm.return_value.choices[0].message.content = "{}"
         monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
 
-        plan = ChatPlanner().plan("тест")
+        plan = await ChatPlanner().plan("тест")
         # Дефолты
         assert plan.tickers == ["SBER", "GAZP", "LKOH"]
         assert plan.timeframe == "D1"

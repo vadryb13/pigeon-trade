@@ -41,17 +41,17 @@ class InsightReviewer:
     def __init__(self, model: str | None = None):
         self.model = model or os.environ.get("AQR_LLM_MODEL")
 
-    def review(
+    async def review(
         self,
         result: PipelineResult,
         deterministic_insights: list[str],
     ) -> list[str]:
-        """Возвращает 0-3 дополнительных инсайта через LLM."""
+        """Возвращает 0-3 дополнительных инсайта через LLM (async)."""
         if not result.top:
             raise ValueError("InsightReviewer.review: result.top is empty")
 
         from ..agent.context import current_credentials
-        from ..llm_env import llm_credentials_env
+        from ..llm_env import acquire_llm_env_lock
 
         creds = current_credentials()
         if creds is None:
@@ -59,48 +59,62 @@ class InsightReviewer:
                 "InsightReviewer.review: session credentials not configured."
             )
 
-        with llm_credentials_env(creds):
-            import litellm
+        payload = {
+            "goal": result.plan.goal,
+            "plan": {
+                "tickers": result.plan.tickers,
+                "timeframe": result.plan.timeframe,
+                "hypothesis_families": result.plan.hypothesis_families,
+                "n_hypotheses": result.plan.n_hypotheses,
+                "period": f"{result.plan.start_date} → {result.plan.end_date}",
+            },
+            "n_hypotheses_tested": result.n_hypotheses_tested,
+            "n_survived_dsr": result.n_survived_dsr,
+            "portfolio_pbo": result.portfolio_pbo,
+            "portfolio_pbo_verdict": result.portfolio_pbo_verdict,
+            "top_5": [
+                {
+                    "name": t.hypothesis.describe(),
+                    "family": t.hypothesis.family,
+                    "ticker": t.hypothesis.ticker,
+                    "params": t.hypothesis.params,
+                    "sharpe": round(t.sharpe, 2),
+                    "dsr": round(t.dsr, 2),
+                    "dsr_verdict": t.dsr_verdict,
+                    "n_bars": len(t.daily_returns) if t.daily_returns else 0,
+                    "n_trades": t.n_trades,
+                    "max_drawdown": round(t.max_drawdown, 3),
+                    "cpcv_mean_sharpe": round(t.cpcv_mean_sharpe, 2),
+                }
+                for t in result.top
+            ],
+            "deterministic_insights": deterministic_insights,
+        }
+        async with await acquire_llm_env_lock() as make_env:
+            with make_env(creds):
+                import litellm
 
-            payload = {
-                "goal": result.plan.goal,
-                "plan": {
-                    "tickers": result.plan.tickers,
-                    "timeframe": result.plan.timeframe,
-                    "hypothesis_families": result.plan.hypothesis_families,
-                    "n_hypotheses": result.plan.n_hypotheses,
-                    "period": f"{result.plan.start_date} → {result.plan.end_date}",
-                },
-                "n_hypotheses_tested": result.n_hypotheses_tested,
-                "n_survived_dsr": result.n_survived_dsr,
-                "portfolio_pbo": result.portfolio_pbo,
-                "portfolio_pbo_verdict": result.portfolio_pbo_verdict,
-                "top_5": [
-                    {
-                        "name": t.hypothesis.describe(),
-                        "family": t.hypothesis.family,
-                        "ticker": t.hypothesis.ticker,
-                        "params": t.hypothesis.params,
-                        "sharpe": round(t.sharpe, 2),
-                        "dsr": round(t.dsr, 2),
-                        "dsr_verdict": t.dsr_verdict,
-                        "n_bars": len(t.daily_returns) if t.daily_returns else 0,
-                        "n_trades": t.n_trades,
-                        "max_drawdown": round(t.max_drawdown, 3),
-                        "cpcv_mean_sharpe": round(t.cpcv_mean_sharpe, 2),
-                    }
-                    for t in result.top
-                ],
-                "deterministic_insights": deterministic_insights,
-            }
-            resp = litellm.completion(
-                model=creds.llm_model,
-                messages=[
-                    {"role": "system", "content": REVIEWER_SYSTEM},
-                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-                ],
-                response_format={"type": "json_object"},
-            )
-        data = json.loads(resp.choices[0].message.content)
+                resp = await litellm.acompletion(
+                    model=creds.llm_model,
+                    messages=[
+                        {"role": "system", "content": REVIEWER_SYSTEM},
+                        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                    ],
+                    response_format={"type": "json_object"},
+                )
+        if not resp.choices:
+            raise RuntimeError("LLM returned no choices for review_insights")
+        content = resp.choices[0].message.content
+        if content is None:
+            raise RuntimeError("LLM returned empty content for review_insights")
+        content = content.strip()
+        if content.startswith("```"):
+            lines = content.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            content = "\n".join(lines)
+        data = json.loads(content)
         obs = data.get("observations", [])
         return [str(o).strip()[:400] for o in obs if o][:3]
