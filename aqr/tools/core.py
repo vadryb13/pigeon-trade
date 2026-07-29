@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ..pipeline.hypotheses import HypothesisSpec, generate_hypotheses
-from ..pipeline.planner import ResearchPlanner, ResearchPlan
+from ..pipeline.planner import ResearchPlan, ResearchPlanner
 from ..types import BacktestResult, PipelineResult
 from ..validation.cpcv import CombinatorialPurgedCV
 from ..validation.deflated_sharpe import deflated_sharpe_ratio
@@ -41,9 +41,9 @@ async def plan_research(goal: str) -> dict[str, Any]:
     result = asdict(plan)
 
     # Дедупликация через embedding
-    from ..session import async_session_factory
     from ..registry.embeddings import Embedder
     from ..registry.store import RegistryStore
+    from ..session import async_session_factory
 
     candidates_text = Embedder.hypothesis_to_text(
         family=",".join(plan.hypothesis_families) or "unknown",

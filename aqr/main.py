@@ -30,8 +30,8 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from aqr import __version__
-from aqr.background import drain as async_drain
 from aqr.api.routes import router as v04_router
+from aqr.background import drain as async_drain
 from aqr.chat import chat_router
 from aqr.chat.web import router as chat_web_router
 from aqr.logging_config import setup_logging
@@ -78,6 +78,7 @@ app.add_middleware(
 )
 
 import logging
+
 _logger = logging.getLogger(__name__)
 if "*" in _origins:
     _logger.warning(

@@ -10,7 +10,7 @@
 from .events import Event, EventBus
 from .executor import PipelineExecutor, PipelineResult
 from .narrator import Narrator
-from .planner import ResearchPlanner, ResearchPlan
+from .planner import ResearchPlan, ResearchPlanner
 from .reviewer import InsightReviewer
 
 __all__ = [

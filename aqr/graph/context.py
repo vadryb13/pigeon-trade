@@ -17,8 +17,8 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from ..session import async_session_factory
 from ..registry import DecryptedSettings, RegistryStore
+from ..session import async_session_factory
 
 # ── Per-session credentials ─────────────────────────────────────
 

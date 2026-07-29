@@ -59,9 +59,9 @@ class BrowserAgent(BaseAgent):
 
     async def _search_similar(self, text: str) -> list[dict]:
         """Search for similar hypotheses in registry by embedding."""
-        from aqr.session import async_session_factory
         from aqr.registry.embeddings import Embedder
         from aqr.registry.store import RegistryStore
+        from aqr.session import async_session_factory
 
         try:
             embedder = Embedder()
@@ -122,8 +122,8 @@ class BrowserAgent(BaseAgent):
             # Count unique (family, ticker) pairs across recent runs
             pairs: set[tuple[str, str]] = set()
             run_ids = [r.id for r in recent]
-            from aqr.session import async_session_factory
             from aqr.registry.store import RegistryStore
+            from aqr.session import async_session_factory
             async with async_session_factory() as db:
                 store = RegistryStore(db)
                 by_run = await store.list_hypotheses_by_runs(run_ids)

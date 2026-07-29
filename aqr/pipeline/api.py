@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aqr.background import schedule
-from aqr.session import get_db
 from aqr.registry import RegistryStore
+from aqr.session import get_db
 
 from .events import BUS, Event
 from .executor import PipelineExecutor

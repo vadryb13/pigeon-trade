@@ -4,7 +4,6 @@ VectorBT optional dep. Тесты skip если не установлен.
 """
 from __future__ import annotations
 
-
 import pandas as pd
 import pytest
 

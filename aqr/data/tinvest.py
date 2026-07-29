@@ -129,7 +129,7 @@ class TInvestAdapter:
         ti = _get_tinvest()
         self._target = os.getenv("INVEST_GRPC_API") or ti.constants.INVEST_GRPC_API
 
-    def _build_async_client(self) -> "AsyncClient":
+    def _build_async_client(self) -> AsyncClient:
         """Создать AsyncClient на основе переданного token и target."""
         from t_tech.invest import AsyncClient
 

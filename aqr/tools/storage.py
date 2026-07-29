@@ -8,8 +8,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from ..session import async_session_factory
 from ..registry import RegistryStore
+from ..session import async_session_factory
 
 
 async def get_run(run_id: str) -> dict[str, Any] | None:

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 
-
 class TestHealthLive:
     def test_health_always_ok(self):
         """/health — всегда 200, не зависит от внешних сервисов."""

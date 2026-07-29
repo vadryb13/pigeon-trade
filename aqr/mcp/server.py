@@ -111,9 +111,9 @@ class MCPHandler:
 
         Uses OpenAI embeddings + pgvector cosine similarity.
         """
-        from aqr.session import async_session_factory
         from aqr.registry.embeddings import Embedder
         from aqr.registry.store import RegistryStore
+        from aqr.session import async_session_factory
 
         embedder = Embedder()
         emb = await embedder.embed(text)

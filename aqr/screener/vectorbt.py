@@ -19,8 +19,9 @@ Usage:
 """
 from __future__ import annotations
 
-import pandas as pd
 from dataclasses import asdict, dataclass
+
+import pandas as pd
 
 
 @dataclass(frozen=True)
@@ -75,8 +76,9 @@ def screen_momentum(
 
     # 1. Load prices — если не переданы, идём в T-Invest
     if candles is None:
-        from aqr.data.tinvest import TInvestAdapter
         import asyncio
+
+        from aqr.data.tinvest import TInvestAdapter
 
         adapter = TInvestAdapter()
         candles = asyncio.run(

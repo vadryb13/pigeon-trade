@@ -32,12 +32,12 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from aqr.graph.context import reset_credentials, set_credentials
-from aqr.graph.graph import _msg_content, _msg_role, get_agent
 from aqr.auth import verify_token_async
 from aqr.crypto import decrypt_str
-from aqr.session import async_session_factory
+from aqr.graph.context import reset_credentials, set_credentials
+from aqr.graph.graph import _msg_content, _msg_role, get_agent
 from aqr.registry import DecryptedSettings, RegistryStore
+from aqr.session import async_session_factory
 
 logger = logging.getLogger(__name__)
 

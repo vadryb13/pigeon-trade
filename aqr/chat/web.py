@@ -24,8 +24,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from aqr.auth import sign_session, verify_token_async
-from aqr.session import async_session_factory
 from aqr.registry import RegistryStore
+from aqr.session import async_session_factory
 
 _CHAT_TEMPLATE = Path(__file__).parent / "templates" / "chat.html"
 _SETTINGS_TEMPLATE = Path(__file__).parent / "templates" / "settings.html"
