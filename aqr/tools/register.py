@@ -29,6 +29,11 @@ _EXPECTED_TOOL_COUNT = 13
 _registration_done = False
 
 
+def _safe_register(spec: ToolSpec) -> None:
+    if registry.get(spec.name) is None:
+        registry.register(spec)
+
+
 def register_all() -> None:
     """Зарегистрировать все инструменты в глобальном реестре.
 
@@ -43,17 +48,7 @@ def register_all() -> None:
         _registration_done = True
         return
 
-
-def _reset_registration_done() -> None:
-    """Сбросить флаг регистрации. Только для тестов."""
-    global _registration_done
-    _registration_done = False
-
     # ── Pipeline tools ──────────────────────────────────────────
-
-    def _safe_register(spec: ToolSpec) -> None:
-        if registry.get(spec.name) is None:
-            registry.register(spec)
 
     _safe_register(ToolSpec(
         name="plan_research",
@@ -287,3 +282,9 @@ def _reset_registration_done() -> None:
     ))
 
     _registration_done = True
+
+
+def _reset_registration_done() -> None:
+    """Сбросить флаг регистрации. Только для тестов."""
+    global _registration_done
+    _registration_done = False

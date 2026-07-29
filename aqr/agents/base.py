@@ -48,7 +48,7 @@ class BaseAgent:
             raise RuntimeError(
                 "Per-session credentials not configured. "
                 "Set them via GET /chat/{token}/settings or "
-                "aqr.agent.context.set_credentials()."
+                "aqr.graph.context.set_credentials()."
             )
         return creds
 

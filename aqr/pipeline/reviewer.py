@@ -50,13 +50,32 @@ class InsightReviewer:
         if not result.top:
             raise ValueError("InsightReviewer.review: result.top is empty")
 
-        from ..agent.context import current_credentials
+        from ..graph.context import current_credentials
         from ..llm_env import acquire_llm_env_lock
 
         creds = current_credentials()
         if creds is None:
-            raise RuntimeError(
-                "InsightReviewer.review: session credentials not configured."
+            # REST-путь (без WS-сессии): собираем credentials из env.
+            from ..registry.store import DecryptedSettings
+            model = self.model or os.environ.get("AQR_LLM_MODEL", "")
+            api_key = (
+                os.environ.get("DEEPSEEK_API_KEY")
+                or os.environ.get("ANTHROPIC_API_KEY")
+                or os.environ.get("OPENAI_API_KEY")
+                or os.environ.get("GIGACHAT_CREDENTIALS")
+                or ""
+            )
+            if not model or not api_key:
+                raise RuntimeError(
+                    "InsightReviewer.review: no credentials available."
+                )
+            creds = DecryptedSettings(
+                session_id="rest",
+                llm_model=model,
+                llm_api_key=api_key,
+                openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
+                invest_token=os.environ.get("INVEST_TOKEN", ""),
+                invest_sandbox=os.environ.get("INVEST_SANDBOX", "1") != "0",
             )
 
         payload = {

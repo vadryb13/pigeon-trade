@@ -111,10 +111,18 @@ def _request_from_trusted_proxy(request: Request) -> bool:
 
 
 async def _resolve_session_id(token: str) -> str:
-    """HMAC-валидация токена + проверка session_id в БД (B14). Иначе 403."""
-    sid = await verify_token_async(token, async_session_factory)
+    """HMAC-валидация токена + auto-create сессии в БД если нет.
+
+    Сначала HMAC-проверка (без БД). Если ОК — get_or_create сессию.
+    Это решает chicken-and-egg: настройки требуют токен, но токен
+    получают ДО создания сессии.
+    """
+    sid = await verify_token_async(token, None)  # HMAC-only, без проверки БД
     if sid is None:
         raise HTTPException(status_code=403, detail="invalid token")
+    async with async_session_factory() as db:
+        await RegistryStore(db).get_or_create_session(sid)
+        await db.commit()
     return sid
 
 

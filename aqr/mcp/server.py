@@ -1,7 +1,7 @@
 """MCP Server — dispatches JSON-RPC methods to internal AQR services.
 
 Each method is an async handler that reads per-session credentials
-from `aqr.agent.context.current_credentials()`.
+from `aqr.graph.context.current_credentials()`.
 
 Supported methods:
   get_candles(ticker, from_date, to_date, interval) — OHLCV from TInvestAdapter

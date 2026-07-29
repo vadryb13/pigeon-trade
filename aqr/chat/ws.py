@@ -18,7 +18,7 @@
 
 Auth: HMAC-подпись session_id обязательна. Per-session credentials
 (LLM/OpenAI/Invest keys) загружаются из session_settings на handshake
-и пробрасываются в графа через ContextVar (см. aqr.agent.context).
+и пробрасываются в графа через ContextVar (см. aqr.graph.context).
 """
 
 from __future__ import annotations
