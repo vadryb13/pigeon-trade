@@ -38,6 +38,17 @@ _LLM_ENV_KEYS = (
 _llm_env_lock = asyncio.Lock()
 
 
+# Единый источник: model-substring → env-переменная.
+# Порядок важен — первый match побеждает. Добавление нового провайдера —
+# одна строка в этом списке, без изменения логики override.
+_PROVIDER_ENV_MAP: list[tuple[str, str]] = [
+    ("claude", "ANTHROPIC_API_KEY"),
+    ("anthropic", "ANTHROPIC_API_KEY"),
+    ("gigachat", "GIGACHAT_CREDENTIALS"),
+    ("deepseek", "DEEPSEEK_API_KEY"),
+]
+
+
 @contextlib.contextmanager
 def llm_env_override(creds: DecryptedSettings):
     """Контекст: на время вызова подменяет env credentials сессии.
@@ -47,22 +58,20 @@ def llm_env_override(creds: DecryptedSettings):
     Вызывающий код обязан `await` LLM-вызов ВНУТРИ блока, иначе восстановление
     env произойдёт до завершения HTTP-запроса.
 
-    Определяет провайдера по модели и подставляет соответствующий ключ.
+    Провайдер определяется по model-substring через _PROVIDER_ENV_MAP.
+    Fallback — OPENAI_API_KEY.
     """
     model = (creds.llm_model or "").lower()
     saved = {k: os.environ.get(k) for k in _LLM_ENV_KEYS}
     try:
-        # Сбрасываем все
         for k in _LLM_ENV_KEYS:
             os.environ.pop(k, None)
-        # Выставляем только релевантный
-        if "claude" in model or "anthropic" in model:
-            os.environ["ANTHROPIC_API_KEY"] = creds.llm_api_key
-        elif "gigachat" in model:
-            os.environ["GIGACHAT_CREDENTIALS"] = creds.llm_api_key
-        else:
-            # OpenAI и любые другие провайдеры через litellm
-            os.environ["OPENAI_API_KEY"] = creds.llm_api_key
+        env_var = "OPENAI_API_KEY"  # fallback
+        for substr, var in _PROVIDER_ENV_MAP:
+            if substr in model:
+                env_var = var
+                break
+        os.environ[env_var] = creds.llm_api_key
         yield
     finally:
         for k, v in saved.items():
