@@ -1,5 +1,5 @@
 """
-ChatPlanner — принимает свободный запрос пользователя и выдаёт исполнимый ResearchPlan.
+ResearchPlanner — принимает свободный запрос пользователя и выдаёт исполнимый ResearchPlan.
 
 Строгий режим: всегда зовёт LLM. Credentials берутся из `current_credentials()`
 (per-session ContextVar). Без credentials — RuntimeError.
@@ -49,7 +49,7 @@ PLANNER_SYSTEM = """Ты руководитель quant-исследовател
 Ответь строго валидным JSON без пояснений."""
 
 
-class ChatPlanner:
+class ResearchPlanner:
     """Планировщик: свободный запрос → ResearchPlan через LLM.
 
     Credentials читаются из per-session ContextVar
@@ -70,7 +70,7 @@ class ChatPlanner:
         creds = current_credentials()
         if creds is None:
             raise RuntimeError(
-                "ChatPlanner.plan: session credentials not configured. "
+                "ResearchPlanner.plan: session credentials not configured. "
                 "Open /chat/{token}/settings and enter credentials."
             )
 

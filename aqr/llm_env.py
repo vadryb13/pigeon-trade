@@ -39,7 +39,7 @@ _llm_env_lock = asyncio.Lock()
 
 
 @contextlib.contextmanager
-def llm_credentials_env(creds: DecryptedSettings):
+def llm_env_override(creds: DecryptedSettings):
     """Контекст: на время вызова подменяет env credentials сессии.
 
     Безопасен для concurrent use благодаря `asyncio.Lock` — параллельные
@@ -73,7 +73,7 @@ def llm_credentials_env(creds: DecryptedSettings):
 
 
 async def acquire_llm_env_lock() -> contextlib.AbstractAsyncContextManager:
-    """Async-обёртка над `llm_credentials_env` с serialization.
+    """Async-обёртка над `llm_env_override` с serialization.
 
     Использование:
         async with await acquire_llm_env_lock() as sync:
@@ -85,7 +85,7 @@ async def acquire_llm_env_lock() -> contextlib.AbstractAsyncContextManager:
 
 class _AsyncEnvLockAdapter:
     """Async context manager, который после `acquire` возвращает синхронный
-    `llm_credentials_env` для блока override.
+    `llm_env_override` для блока override.
     """
 
     def __init__(self, lock: asyncio.Lock) -> None:
@@ -106,4 +106,4 @@ class _SyncEnvFactory:
         self._lock = lock
 
     def __call__(self, creds: DecryptedSettings) -> contextlib.AbstractContextManager:
-        return llm_credentials_env(creds)
+        return llm_env_override(creds)

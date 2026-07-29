@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from ..pipeline.hypotheses import HypothesisSpec, generate_hypotheses
-from ..pipeline.planner import ChatPlanner, ResearchPlan
+from ..pipeline.planner import ResearchPlanner, ResearchPlan
 from ..types import BacktestResult, PipelineResult
 from ..validation.cpcv import CombinatorialPurgedCV
 from ..validation.deflated_sharpe import deflated_sharpe_ratio
@@ -36,12 +36,12 @@ async def plan_research(goal: str) -> dict[str, Any]:
     семантически близкие гипотезы (cosine ≥ 0.92) — добавляет в план поля
     `similar_runs` и `dedup_warning` для агента.
     """
-    planner = ChatPlanner()
+    planner = ResearchPlanner()
     plan = await planner.plan(goal)
     result = asdict(plan)
 
     # Дедупликация через embedding
-    from ..db import _async_session_factory
+    from ..session import async_session_factory
     from ..registry.embeddings import Embedder
     from ..registry.store import RegistryStore
 
@@ -52,7 +52,7 @@ async def plan_research(goal: str) -> dict[str, Any]:
     )
     embedder = Embedder()
     emb = await embedder.embed(candidates_text)
-    async with _async_session_factory() as db:
+    async with async_session_factory() as db:
         store = RegistryStore(db)
         similar = await store.search_similar(emb, threshold=0.92, limit=5)
     if similar:
@@ -93,7 +93,6 @@ async def load_prices(
     Returns: {ticker: [float, ...]} — списки цен закрытия (для JSON-сериализации).
     """
     import asyncio
-    import contextlib
 
     from ..data.ohlcv_cache import OhlcvCache
     from ..data.tinvest import TInvestAdapter
@@ -122,11 +121,21 @@ async def load_prices(
             df = await adapter.candles(t, start_date, end_date, timeframe)
             if len(df) < MIN_CACHED_ROWS:
                 raise ValueError(f"мало данных ({len(df)} строк)")
-            with contextlib.suppress(Exception):
+            try:
                 cache.put_cache(t, df, timeframe)
+            except Exception:
+                logger.warning("Cache write failed for %s", t, exc_info=True)
             return t, df["close"].astype(float)
 
-        results = await asyncio.gather(*[_fetch_one(t) for t in needs_remote])
+        results = await asyncio.gather(
+            *[_fetch_one(t) for t in needs_remote], return_exceptions=True,
+        )
+        # Проверяем результаты — если хоть один провалился, пробрасываем ошибку.
+        for t, r in zip(needs_remote, results):
+            if isinstance(r, Exception):
+                raise RuntimeError(
+                    f"load_prices: T-Invest failed for {t}: {type(r).__name__}"
+                ) from r
         remote_series = dict(results)
 
     result = {**cached_series, **remote_series}
@@ -336,9 +345,8 @@ async def validate_portfolio(
     # B19: require verdict — без него клиент не понимает, что делать с результатом.
     verdict = out.get("verdict", "")
     if not verdict:
-        raise RuntimeError(
-            f"PBO computation returned empty verdict: {dict(out)}"
-        )
+        logger.error("PBO computation returned empty verdict: %s", dict(out))
+        return {"pbo": 0.0, "verdict": "error", "error": "PBO computation returned empty verdict"}
     return {"pbo": float(out["pbo"]), "verdict": verdict}
 
 

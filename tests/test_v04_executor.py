@@ -4,13 +4,11 @@ nautilus_trader is optional — tests use `importorskip` or mock `_require_nauti
 """
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock
 
-import pandas as pd
 import pytest
 
-from aqr.agent.context import reset_credentials, set_credentials
+from aqr.graph.context import reset_credentials, set_credentials
 from aqr.registry import DecryptedSettings
 
 

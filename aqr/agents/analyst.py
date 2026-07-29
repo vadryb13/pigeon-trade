@@ -205,7 +205,7 @@ class AnalystAgent(BaseAgent):
                 )
                 return None
             return result
-        except Exception as exc:
+        except Exception:
             self.logger.exception(
                 "backtest_one exception: %s/%s %s", ticker, family, params,
             )

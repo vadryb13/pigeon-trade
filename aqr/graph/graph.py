@@ -17,6 +17,7 @@ Caveat: follow-up routing через `_llm_route` работает только 
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from typing import Annotated, Any, TypedDict
@@ -253,7 +254,6 @@ async def narrate_node(state: AgentState) -> dict[str, Any]:
         insights.extend(extra)
     except Exception:
         # B20: LLM-review — дополнительная фича. Логируем, но не валим граф.
-        import logging
         logging.getLogger(__name__).exception("review_insights failed")
 
     # Нарратив
@@ -400,12 +400,9 @@ async def _llm_route(state: AgentState) -> str:
                 return END
             return action
     except Exception:
-        import logging
-        logging.getLogger(__name__).warning(
-            "LLM routing failed, falling back to deterministic", exc_info=True
+        logging.getLogger(__name__).exception(
+            "LLM routing failed, falling back to deterministic"
         )
-        pass
-
     return _deterministic_route(state)
 
 
@@ -571,11 +568,12 @@ async def run_agent(
     try:
         final_state = await agent.ainvoke(initial_state)
     except Exception as e:
+        logging.getLogger(__name__).exception("run_agent failed")
         return {
-            "response": f"Ошибка при выполнении: {e}",
+            "response": "Ошибка при выполнении",
             "narrative": None,
             "results": None,
-            "error": str(e),
+            "error": type(e).__name__,
         }
 
     messages = final_state.get("messages", [])

@@ -29,7 +29,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from aqr import __version__, tasks
+from aqr import __version__
+from aqr.background import drain as async_drain
 from aqr.api.routes import router as v04_router
 from aqr.chat import chat_router
 from aqr.chat.web import router as chat_web_router
@@ -48,7 +49,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await tasks.drain(timeout=30.0)
+        await async_drain(timeout=30.0)
 
 
 app = FastAPI(
@@ -60,19 +61,29 @@ app = FastAPI(
 
 _ALLOWED_ORIGINS = os.getenv(
     "AQR_ALLOWED_ORIGINS",
-    "*",  # dev default — для прода AQR_ALLOWED_ORIGINS=https://app.example.com
+    "",  # по умолчанию пусто — CORS отключён в проде, "*" только для dev
 ).split(",")
 _ALLOWED_METHODS = os.getenv(
     "AQR_ALLOWED_METHODS",
     "GET,POST",
 ).split(",")
 
+_origins = [o.strip() for o in _ALLOWED_ORIGINS if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in _ALLOWED_ORIGINS],
+    allow_origins=_origins or [],
     allow_methods=[m.strip() for m in _ALLOWED_METHODS],
     allow_headers=["*"],
 )
+
+import logging
+_logger = logging.getLogger(__name__)
+if "*" in _origins:
+    _logger.warning(
+        "SECURITY: CORS allow_origins='*' — все origin могут обращаться к API. "
+        "В проде задайте AQR_ALLOWED_ORIGINS=https://app.example.com"
+    )
 
 app.include_router(pipeline_router)
 app.include_router(chat_router)
@@ -96,6 +107,6 @@ async def health_ready(response: Response) -> dict:
     try:
         result = await validate_runtime()
         return result
-    except RuntimeError as e:
+    except RuntimeError:
         response.status_code = 503
-        return {"status": "degraded", "error": str(e)}
+        return {"status": "degraded", "error": "runtime validation failed"}

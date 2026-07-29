@@ -154,7 +154,7 @@ class TestPurgedKfoldIndices:
         for k, (train_idx, test_idx) in enumerate(
             purged_kfold_indices(ts, label_ends, n_splits=5, embargo_pct=0.0),
         ):
-            test_start = k * 20
+            _test_start = k * 20
             test_end = (k + 1) * 20 if k < 4 else 100
             # Train должен включать точки сразу после test (без gap)
             if test_end < 100:

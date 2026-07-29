@@ -25,7 +25,7 @@ def _stable_secret(monkeypatch):
 @pytest.fixture
 def with_credentials():
     """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
     from aqr.registry import DecryptedSettings
 
     creds = DecryptedSettings(
@@ -109,7 +109,7 @@ def _install_fake_litellm(monkeypatch, response_content: str) -> AsyncMock:
 
 async def test_reviewer_raises_without_credentials(monkeypatch):
     """Без active credentials в ContextVar → RuntimeError."""
-    from aqr.agent.context import current_credentials
+    from aqr.graph.context import current_credentials
 
     assert current_credentials() is None
 

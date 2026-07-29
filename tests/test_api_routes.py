@@ -19,7 +19,7 @@ def _stable_secret(monkeypatch):
 
 @pytest.fixture
 def with_credentials():
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
     from aqr.registry import DecryptedSettings
 
     creds = DecryptedSettings(
@@ -87,8 +87,8 @@ def mock_db(monkeypatch):
 
     factory = type("_F", (), {"__call__": lambda self: _FakeSession()})()
 
-    from aqr import db as db_mod
-    monkeypatch.setattr(db_mod, "_async_session_factory", factory)
+    from aqr import session as db_mod
+    monkeypatch.setattr(db_mod, "async_session_factory", factory)
 
     # Мок RegistryStore
     mock_store = MagicMock()

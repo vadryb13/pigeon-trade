@@ -115,7 +115,7 @@ class WriterAgent(BaseAgent):
                 pbo=pbo,
                 pbo_verdict=pbo_verdict,
             )
-        except Exception as exc:
+        except Exception:
             self.logger.exception("extract_insights failed")
             return ["Не удалось извлечь инсайты автоматически."]
 
@@ -147,6 +147,6 @@ class WriterAgent(BaseAgent):
                 top_results=top_results,
                 elapsed_seconds=elapsed,
             )
-        except Exception as exc:
+        except Exception:
             self.logger.exception("narrate failed")
             return "Не удалось сгенерировать отчёт."

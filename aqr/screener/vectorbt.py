@@ -19,6 +19,7 @@ Usage:
 """
 from __future__ import annotations
 
+import pandas as pd
 from dataclasses import asdict, dataclass
 
 
@@ -71,7 +72,6 @@ def screen_momentum(
         (для удобства передачи в PipelineResult).
     """
     vbt = _require_vectorbt()
-    import numpy as np
 
     # 1. Load prices — если не переданы, идём в T-Invest
     if candles is None:

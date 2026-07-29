@@ -46,10 +46,10 @@ def mock_db(monkeypatch):
 
     factory = type("_F", (), {"__call__": lambda self: _FakeSession()})()
 
-    from aqr import db as db_mod
-    monkeypatch.setattr(db_mod, "_async_session_factory", factory)
-    from aqr.agent import context as ctx_mod
-    monkeypatch.setattr(ctx_mod, "_async_session_factory", factory)
+    from aqr import session as db_mod
+    monkeypatch.setattr(db_mod, "async_session_factory", factory)
+    from aqr.graph import context as ctx_mod
+    monkeypatch.setattr(ctx_mod, "async_session_factory", factory)
 
     # Patch RegistryStore (импортирован в context.py через `from ..registry import RegistryStore`)
     mock_store = MagicMock()
@@ -66,7 +66,7 @@ def mock_db(monkeypatch):
 class TestGetRecentRuns:
     @pytest.mark.asyncio
     async def test_returns_formatted_dicts(self, mock_db):
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
 
         runs = [
             _FakeRun(goal="g1", summary_metrics={"n_tested": 10, "n_survived_dsr": 2, "portfolio_pbo": 0.3}),
@@ -90,7 +90,7 @@ class TestGetRecentRuns:
 class TestGetBestStrategy:
     @pytest.mark.asyncio
     async def test_finds_max_dsr_hypothesis(self, mock_db):
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
 
         run_a = _FakeRun(goal="r1")
         run_b = _FakeRun(goal="r2")
@@ -113,7 +113,7 @@ class TestGetBestStrategy:
 
     @pytest.mark.asyncio
     async def test_returns_none_when_no_runs(self, mock_db):
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
 
         mock_db.list_runs_by_session = AsyncMock(return_value=[])
 
@@ -128,7 +128,7 @@ class TestGetBestStrategy:
 class TestGetUntestedCombos:
     @pytest.mark.asyncio
     async def test_suggests_uncovered_family_on_known_ticker(self, mock_db):
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
 
         run = _FakeRun()
         # Все комбинации кроме (mean_reversion, SBER) уже проверены
@@ -151,14 +151,14 @@ class TestGetUntestedCombos:
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_db_fails(self, monkeypatch):
-        from aqr import db as db_mod
-        from aqr.agent.context import SessionContext
+        from aqr import session as db_mod
+        from aqr.graph.context import SessionContext
 
         class _BrokenFactory:
             def __call__(self):
                 raise RuntimeError("DB down")
 
-        monkeypatch.setattr(db_mod, "_async_session_factory", _BrokenFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", _BrokenFactory())
 
         ctx = SessionContext("sess")
         suggestions = await ctx.get_untested_combos()
@@ -171,7 +171,7 @@ class TestGetUntestedCombos:
 class TestBuildContextPrompt:
     @pytest.mark.asyncio
     async def test_includes_recent_runs_and_best_strategy(self, mock_db):
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
 
         run = _FakeRun(goal="проверь momentum", summary_metrics={
             "n_tested": 20, "n_survived_dsr": 5, "portfolio_pbo": 0.3,
@@ -191,7 +191,7 @@ class TestBuildContextPrompt:
     @pytest.mark.asyncio
     async def test_includes_untested_section(self, mock_db):
         """Когда есть непроверенные комбинации — они попадают в prompt."""
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
 
         # 1 run, где проверены только momentum/SBER — остальные семейства белые пятна
         run = _FakeRun()

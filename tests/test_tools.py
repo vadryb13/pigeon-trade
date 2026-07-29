@@ -31,7 +31,7 @@ def _clean_registry():
 @pytest.fixture
 def with_credentials():
     """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
     from aqr.registry import DecryptedSettings
 
     creds = DecryptedSettings(
@@ -149,8 +149,7 @@ class TestPlanResearch:
     @pytest.mark.asyncio
     async def test_plan_momentum_sber(self, monkeypatch, with_credentials, fake_litellm):
         """План для 'проверь momentum на Сбере' с моком LLM и мок БД (пустой dedup)."""
-        from aqr import db as db_mod
-        from aqr.registry import RegistryStore
+        from aqr import session as db_mod
 
         # Мок DB: возвращает пустой результат search_similar (нет похожих)
         class _EmptySession:
@@ -170,7 +169,7 @@ class TestPlanResearch:
             def __call__(self):
                 return _EmptySession()
 
-        monkeypatch.setattr(db_mod, "_async_session_factory", _EmptyFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", _EmptyFactory())
 
         # Мок openai (модуль может не быть установлен)
         import types
@@ -207,7 +206,7 @@ class TestPlanResearch:
     async def test_plan_blue_chips(
         self, monkeypatch, with_credentials, fake_litellm
     ):
-        from aqr import db as db_mod
+        from aqr import session as db_mod
 
         class _EmptySession:
             async def __aenter__(self):
@@ -224,7 +223,7 @@ class TestPlanResearch:
             def __call__(self):
                 return _EmptySession()
 
-        monkeypatch.setattr(db_mod, "_async_session_factory", _EmptyFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", _EmptyFactory())
 
         import types
         from unittest.mock import MagicMock
@@ -254,7 +253,7 @@ class TestPlanResearch:
 
     @pytest.mark.asyncio
     async def test_plan_returns_dict(self, monkeypatch, with_credentials, fake_litellm):
-        from aqr import db as db_mod
+        from aqr import session as db_mod
 
         class _EmptySession:
             async def __aenter__(self):
@@ -271,7 +270,7 @@ class TestPlanResearch:
             def __call__(self):
                 return _EmptySession()
 
-        monkeypatch.setattr(db_mod, "_async_session_factory", _EmptyFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", _EmptyFactory())
 
         import types
         from unittest.mock import MagicMock

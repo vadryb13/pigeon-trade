@@ -26,21 +26,25 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import time
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from aqr.agent.context import reset_credentials, set_credentials
-from aqr.agent.graph import _msg_content, _msg_role, get_agent
-from aqr.auth import verify_token, verify_token_async
+from aqr.graph.context import reset_credentials, set_credentials
+from aqr.graph.graph import _msg_content, _msg_role, get_agent
+from aqr.auth import verify_token_async
 from aqr.crypto import decrypt_str
-from aqr.db import _async_session_factory
+from aqr.session import async_session_factory
 from aqr.registry import DecryptedSettings, RegistryStore
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Максимальный размер одного WS-сообщения (защита от DoS через отправку гигабайтных пакетов).
+WS_MAX_MESSAGE_BYTES = int(os.getenv("AQR_WS_MAX_MSG_SIZE", str(128 * 1024)))  # 128 KB default
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -53,20 +57,20 @@ async def _save_history(
 ) -> None:
     """Сохранить сообщение в БД. Тихий отказ при ошибке (graceful)."""
     try:
-        async with _async_session_factory() as db:
+        async with async_session_factory() as db:
             store = RegistryStore(db)
             await store.save_chat_message(
                 session_id=session_id, role=role, content=content, meta=meta,
             )
             await db.commit()
     except Exception:
-        logger.warning("Не удалось сохранить сообщение", exc_info=True)
+        logger.exception("Не удалось сохранить сообщение")
 
 
 async def _load_history(session_id: str, limit: int = 200) -> list[dict[str, Any]]:
     """Загрузить последние N сообщений сессии. Пустой список при ошибке."""
     try:
-        async with _async_session_factory() as db:
+        async with async_session_factory() as db:
             store = RegistryStore(db)
             msgs = await store.list_chat_history(session_id, limit=limit)
             return [
@@ -79,7 +83,7 @@ async def _load_history(session_id: str, limit: int = 200) -> list[dict[str, Any
                 for m in msgs
             ]
     except Exception:
-        logger.warning("Не удалось загрузить историю", exc_info=True)
+        logger.exception("Не удалось загрузить историю")
         return []
 
 
@@ -90,7 +94,7 @@ async def _load_credentials(session_id: str) -> DecryptedSettings | None:
     безопасности (без них LLM/Invest не работают, и мы не хотим
     тихо игнорировать пропавший доступ к данным).
     """
-    async with _async_session_factory() as db:
+    async with async_session_factory() as db:
         store = RegistryStore(db)
         settings = await store.load_session_settings(session_id)
     if settings is None:
@@ -129,7 +133,7 @@ async def chat_ws(websocket: WebSocket, token: str):
         {type: "resume"} — отдать историю
         {type: "ping"} — keepalive
     """
-    session_id = await verify_token_async(token, _async_session_factory)
+    session_id = await verify_token_async(token, async_session_factory)
     if session_id is None:
         await websocket.close(code=1008, reason="invalid token")
         return
@@ -158,6 +162,11 @@ async def chat_ws(websocket: WebSocket, token: str):
     try:
         while True:
             raw = await websocket.receive_text()
+            if len(raw.encode("utf-8")) > WS_MAX_MESSAGE_BYTES:
+                await _send_json(websocket, {
+                    "type": "error", "message": f"Message too large (max {WS_MAX_MESSAGE_BYTES} bytes)",
+                })
+                continue
             try:
                 payload = json.loads(raw)
             except json.JSONDecodeError:
@@ -205,10 +214,10 @@ async def chat_ws(websocket: WebSocket, token: str):
                         message=content,
                         credentials=credentials,
                     )
-                except Exception as e:
+                except Exception:
                     logger.exception("Agent crashed in WS")
                     await _send_json(websocket, {
-                        "type": "error", "message": f"Agent error: {e}",
+                        "type": "error", "message": "Agent error: internal server error",
                     })
 
             else:
@@ -219,10 +228,10 @@ async def chat_ws(websocket: WebSocket, token: str):
 
     except WebSocketDisconnect:
         logger.info("WS disconnected: session_id=%s", session_id)
-    except Exception as e:
+    except Exception:
         logger.exception("WS error")
         with contextlib.suppress(Exception):
-            await _send_json(websocket, {"type": "error", "message": str(e)})
+            await _send_json(websocket, {"type": "error", "message": "Internal server error"})
 
 
 # ── Agent runner (стримит события в WS) ─────────────────────────
@@ -247,12 +256,12 @@ async def _run_agent_for_session(
         session_context_prompt = ""
         if credentials.llm_api_key:
             try:
-                from aqr.agent.context import SessionContext
+                from aqr.graph.context import SessionContext
                 session_context_prompt = await SessionContext(
                     session_id,
                 ).build_context_prompt()
             except Exception:
-                pass
+                logger.exception("SessionContext.build_context_prompt failed")
 
         result = await _run_agent_inner(websocket, session_id, message, session_context_prompt)
     finally:
@@ -303,6 +312,7 @@ async def _run_agent_inner(
                     })
                 last_state = ev
         except Exception:
+            logger.exception("astream failed, falling back to ainvoke")
             last_state = await agent.ainvoke(initial_state)
             await _send_json(websocket, {"type": "progress", "node": "final", "data": _state_summary(last_state)})
 
@@ -335,10 +345,11 @@ async def _run_agent_inner(
             "plan_tickers": plan.get("tickers") if isinstance(plan, dict) else None,
         })
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Agent inner run failed")
         await _send_json(websocket, {
             "type": "error",
-            "message": f"Agent failed: {e}",
+            "message": "Agent failed: internal server error",
         })
 
 

@@ -99,6 +99,7 @@ async def execute_with_slippage(
     prices: list[float],
     commission_pct: float = BROKER_COMMISSION_PCT,
     slippage_ticks: int = 1,
+    n_hypotheses: int = 20,
 ) -> BacktestResult:
     """Run a backtest with realistic execution (NautilusTrader if available).
 
@@ -153,7 +154,7 @@ async def execute_with_slippage(
             )
 
     # Native path: same logic as backtest_one
-    return _compute_metrics(strat_ret, spec, price_series=price_series)
+    return _compute_metrics(strat_ret, spec, price_series=price_series, n_hypotheses=n_hypotheses)
 
 
 async def _run_nautilus_engine_placeholder(

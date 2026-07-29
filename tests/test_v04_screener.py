@@ -4,7 +4,6 @@ VectorBT optional dep. Тесты skip если не установлен.
 """
 from __future__ import annotations
 
-import os
 
 import pandas as pd
 import pytest
@@ -99,7 +98,7 @@ class TestVectorBTScreener:
 
     def test_returns_raises_without_credentials(self, monkeypatch):
         """Без credentials в ContextVar → RuntimeError."""
-        from aqr.agent.context import _active_credentials
+        from aqr.graph.context import _active_credentials
 
         # Сбрасываем ContextVar напрямую (reset_credentials ожидает Token, не None)
         saved_token = _active_credentials.set(None)
@@ -113,7 +112,7 @@ class TestVectorBTScreener:
 
     def test_works_with_context_credentials(self, synthetic_prices):
         """Credentials в ContextVar → screen_momentum работает."""
-        from aqr.agent.context import reset_credentials, set_credentials
+        from aqr.graph.context import reset_credentials, set_credentials
         from aqr.registry import DecryptedSettings
         from aqr.screener import screen_momentum
 

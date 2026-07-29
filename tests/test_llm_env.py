@@ -1,4 +1,4 @@
-"""Тесты для aqr.llm_env.llm_credentials_env()."""
+"""Тесты для aqr.llm_env.llm_env_override()."""
 from __future__ import annotations
 
 import os
@@ -28,9 +28,9 @@ class TestLlmCredentialsEnv:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-        from aqr.llm_env import llm_credentials_env
+        from aqr.llm_env import llm_env_override
 
-        with llm_credentials_env(_creds("claude-3-5-sonnet-20241022", "sk-ant-x")):
+        with llm_env_override(_creds("claude-3-5-sonnet-20241022", "sk-ant-x")):
             assert os.environ["ANTHROPIC_API_KEY"] == "sk-ant-x"
             assert "OPENAI_API_KEY" not in os.environ
         assert "ANTHROPIC_API_KEY" not in os.environ
@@ -39,9 +39,9 @@ class TestLlmCredentialsEnv:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-        from aqr.llm_env import llm_credentials_env
+        from aqr.llm_env import llm_env_override
 
-        with llm_credentials_env(_creds("gpt-4o-mini", "sk-oai-x")):
+        with llm_env_override(_creds("gpt-4o-mini", "sk-oai-x")):
             assert os.environ["OPENAI_API_KEY"] == "sk-oai-x"
             assert "ANTHROPIC_API_KEY" not in os.environ
         assert "OPENAI_API_KEY" not in os.environ
@@ -51,9 +51,9 @@ class TestLlmCredentialsEnv:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("GIGACHAT_CREDENTIALS", raising=False)
 
-        from aqr.llm_env import llm_credentials_env
+        from aqr.llm_env import llm_env_override
 
-        with llm_credentials_env(_creds("gigachat/GigaChat-Pro", "giga-cred")):
+        with llm_env_override(_creds("gigachat/GigaChat-Pro", "giga-cred")):
             assert os.environ["GIGACHAT_CREDENTIALS"] == "giga-cred"
             assert "ANTHROPIC_API_KEY" not in os.environ
             assert "OPENAI_API_KEY" not in os.environ
@@ -63,9 +63,9 @@ class TestLlmCredentialsEnv:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "PREVIOUS_KEY")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-        from aqr.llm_env import llm_credentials_env
+        from aqr.llm_env import llm_env_override
 
-        with llm_credentials_env(_creds("gpt-4o-mini", "sk-oai-new")):
+        with llm_env_override(_creds("gpt-4o-mini", "sk-oai-new")):
             assert os.environ["OPENAI_API_KEY"] == "sk-oai-new"
             # Внутри контекста ANTHROPIC_API_KEY удалён
             assert "ANTHROPIC_API_KEY" not in os.environ
@@ -80,9 +80,9 @@ class TestLlmCredentialsEnv:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ORIGINAL")
 
-        from aqr.llm_env import llm_credentials_env
+        from aqr.llm_env import llm_env_override
 
-        with pytest.raises(RuntimeError), llm_credentials_env(
+        with pytest.raises(RuntimeError), llm_env_override(
             _creds("gpt-4o-mini", "sk-oai-x")
         ):
             raise RuntimeError("boom")

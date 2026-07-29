@@ -4,11 +4,10 @@ Mock AsyncClient (async context manager), проверяем контракт б
 """
 from __future__ import annotations
 
-import os
 import sys
 import types
 from datetime import UTC
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -20,7 +19,7 @@ def _stable_secret(monkeypatch):
 
 @pytest.fixture
 def with_credentials():
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
     from aqr.registry import DecryptedSettings
 
     creds = DecryptedSettings(
@@ -274,7 +273,7 @@ class TestSandboxTarget:
     def test_credentials_sandbox_overrides_env(self, monkeypatch):
         monkeypatch.setenv("INVEST_SANDBOX", "0")
 
-        from aqr.agent.context import reset_credentials, set_credentials
+        from aqr.graph.context import reset_credentials, set_credentials
         from aqr.registry import DecryptedSettings
 
         creds = DecryptedSettings(
@@ -343,7 +342,7 @@ class TestErrorPropagation:
 
 class TestCredentialsRequired:
     def test_raises_without_credentials(self, monkeypatch):
-        from aqr.agent.context import current_credentials
+        from aqr.graph.context import current_credentials
 
         assert current_credentials() is None
 

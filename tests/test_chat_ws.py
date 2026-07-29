@@ -56,13 +56,13 @@ class _FakeFactory:
 
 @pytest.fixture
 def mock_db(monkeypatch):
-    """Мок _async_session_factory на уровне aqr.db и aqr.chat.ws."""
-    from aqr import db as db_mod
+    """Мок async_session_factory на уровне aqr.db и aqr.chat.ws."""
+    from aqr import session as db_mod
     from aqr.chat import ws as ws_mod
 
     factory = _FakeFactory()
-    monkeypatch.setattr(db_mod, "_async_session_factory", factory)
-    monkeypatch.setattr(ws_mod, "_async_session_factory", factory)
+    monkeypatch.setattr(db_mod, "async_session_factory", factory)
+    monkeypatch.setattr(ws_mod, "async_session_factory", factory)
     return factory
 
 
@@ -325,7 +325,7 @@ class TestSaveAndListChatHistory:
 
     @pytest.mark.asyncio
     async def test_save_calls_store_method(self, monkeypatch):
-        from aqr import db as db_mod
+        from aqr import session as db_mod
         from aqr.registry.store import RegistryStore
 
         class _S:
@@ -342,7 +342,7 @@ class TestSaveAndListChatHistory:
             def __call__(self):
                 return _S()
 
-        monkeypatch.setattr(db_mod, "_async_session_factory", _F())
+        monkeypatch.setattr(db_mod, "async_session_factory", _F())
 
         captured = {}
 

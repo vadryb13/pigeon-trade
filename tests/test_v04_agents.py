@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aqr.agent.context import reset_credentials, set_credentials
+from aqr.graph.context import reset_credentials, set_credentials
 from aqr.registry import DecryptedSettings
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -161,8 +161,8 @@ def mock_openai(monkeypatch):
 
 @pytest.fixture
 def mock_db(monkeypatch):
-    """Mock _async_session_factory for DB-dependent agents."""
-    from aqr import db as db_mod
+    """Mock async_session_factory for DB-dependent agents."""
+    from aqr import session as db_mod
 
     class _FakeSession:
         async def __aenter__(self):
@@ -193,7 +193,7 @@ def mock_db(monkeypatch):
         def add(self, *a, **kw):
             return None
 
-    monkeypatch.setattr(db_mod, "_async_session_factory", lambda: _FakeSession())
+    monkeypatch.setattr(db_mod, "async_session_factory", lambda: _FakeSession())
 
 
 @pytest.fixture

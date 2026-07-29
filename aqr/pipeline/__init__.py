@@ -10,12 +10,12 @@
 from .events import Event, EventBus
 from .executor import PipelineExecutor, PipelineResult
 from .narrator import Narrator
-from .planner import ChatPlanner, ResearchPlan
+from .planner import ResearchPlanner, ResearchPlan
 from .reviewer import InsightReviewer
 
 __all__ = [
     "EventBus", "Event",
-    "ChatPlanner", "ResearchPlan",
+    "ResearchPlanner", "ResearchPlan",
     "PipelineExecutor", "PipelineResult",
     "Narrator",
     "InsightReviewer",

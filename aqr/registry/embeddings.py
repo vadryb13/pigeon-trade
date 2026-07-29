@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
 
-EMBEDDING_DIM = 768
+from ..types import EMBEDDING_DIM  # noqa: F401 — реэкспорт для обратной совместимости
 
 
 class Embedder:
@@ -48,7 +48,7 @@ class Embedder:
     def _api_key_from_context() -> str | None:
         """Получить OpenAI API key из ContextVar credentials."""
         try:
-            from aqr.agent.context import current_credentials
+            from aqr.graph.context import current_credentials
 
             creds = current_credentials()
             if creds and creds.openai_api_key:

@@ -106,17 +106,4 @@ class ReviewerAgent(BaseAgent):
             return await tool.fn(results=results)
         except Exception as exc:
             self.logger.exception("PBO computation failed")
-            # B22: редaктируем потенциальные credentials из repr(exc) —
-            # litellm/openai/gRPC клиенты могут включать API-ключи в
-            # сообщения об ошибках.
-            exc_str = str(exc)
-            for key in ("api_key", "token", "secret", "password", "credential"):
-                # Прячем значения вида <key>=<value> или "<key>": "<value>"
-                import re
-                exc_str = re.sub(
-                    rf'({key})["\']?\s*[:=]\s*["\']?[^"\',\s}}]+',
-                    r"\1=***",
-                    exc_str,
-                    flags=re.IGNORECASE,
-                )
-            return {"pbo": 0.0, "pbo_verdict": f"error: {exc_str}"}
+            return {"pbo": 0.0, "pbo_verdict": f"error: {type(exc).__name__}"}

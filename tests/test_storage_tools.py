@@ -20,7 +20,7 @@ def _stable_secret(monkeypatch):
 @pytest.fixture
 def with_credentials():
     """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
     from aqr.registry import DecryptedSettings
 
     creds = DecryptedSettings(
@@ -72,7 +72,7 @@ class _FakeRun:
 
 @pytest.fixture
 def mock_db_and_store(monkeypatch):
-    """Мок _async_session_factory и RegistryStore на уровне обоих модулей."""
+    """Мок async_session_factory и RegistryStore на уровне обоих модулей."""
 
     class _FakeSession:
         async def __aenter__(self):
@@ -86,13 +86,13 @@ def mock_db_and_store(monkeypatch):
 
     factory = type("_F", (), {"__call__": lambda self: _FakeSession()})()
 
-    # Патчим db._async_session_factory
-    from aqr import db as db_mod
-    monkeypatch.setattr(db_mod, "_async_session_factory", factory)
+    # Патчим db.async_session_factory
+    from aqr import session as db_mod
+    monkeypatch.setattr(db_mod, "async_session_factory", factory)
 
-    # Патчим storage._async_session_factory (импортирован в namespace)
+    # Патчим storage.async_session_factory (импортирован в namespace)
     from aqr.tools import storage as storage_mod
-    monkeypatch.setattr(storage_mod, "_async_session_factory", factory)
+    monkeypatch.setattr(storage_mod, "async_session_factory", factory)
 
     # Создаём мок RegistryStore
     mock_store = MagicMock()
@@ -139,13 +139,16 @@ class TestGetRun:
         assert result["hypotheses"][0]["family"] == "momentum"
 
     @pytest.mark.asyncio
-    async def test_get_run_returns_none_when_not_found(self, mock_db_and_store):
+    async def test_get_run_returns_error_dict_when_not_found(self, mock_db_and_store):
         from aqr.tools import storage
 
         mock_db_and_store.get_run = AsyncMock(return_value=None)
+        run_id = str(uuid.uuid4())
 
-        result = await storage.get_run(str(uuid.uuid4()))
-        assert result is None
+        result = await storage.get_run(run_id)
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert run_id in result["error"]
 
 
 # ── compare_runs ─────────────────────────────────────────────────
@@ -236,7 +239,7 @@ class TestSearchSimilarHypotheses:
 
     @pytest.mark.asyncio
     async def test_search_returns_empty_when_db_fails(self, monkeypatch, with_credentials):
-        from aqr import db as db_mod
+        from aqr import session as db_mod
         from aqr.tools import storage
         from aqr.tools import storage as storage_mod
 
@@ -244,8 +247,8 @@ class TestSearchSimilarHypotheses:
             def __call__(self):
                 raise RuntimeError("DB down")
 
-        monkeypatch.setattr(db_mod, "_async_session_factory", _BrokenFactory())
-        monkeypatch.setattr(storage_mod, "_async_session_factory", _BrokenFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", _BrokenFactory())
+        monkeypatch.setattr(storage_mod, "async_session_factory", _BrokenFactory())
 
         import pytest
         # Strict mode (Phase 6): search_similar_hypotheses now raises on DB failure

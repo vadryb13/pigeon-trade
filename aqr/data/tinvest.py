@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 if TYPE_CHECKING:
-    from t_tech.invest import AsyncClient, CandleInterval, InstrumentType
+    from t_tech.invest import AsyncClient
 
 # Lazy import для тестов и для отделения import-time от runtime
 _tinvest_module = None
@@ -100,7 +100,7 @@ class TInvestAdapter:
     ) -> None:
         # Если token не передан — берём из per-session ContextVar
         if token is None:
-            from aqr.agent.context import current_credentials
+            from aqr.graph.context import current_credentials
 
             creds = current_credentials()
             if creds is not None:

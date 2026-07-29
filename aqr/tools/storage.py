@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from ..db import _async_session_factory
+from ..session import async_session_factory
 from ..registry import RegistryStore
 
 
@@ -18,11 +18,11 @@ async def get_run(run_id: str) -> dict[str, Any] | None:
         rid = uuid.UUID(run_id)
     except (ValueError, AttributeError):
         return {"error": f"Invalid run_id: {run_id!r}"}
-    async with _async_session_factory() as db:
+    async with async_session_factory() as db:
         store = RegistryStore(db)
         run = await store.get_run(rid)
         if run is None:
-            return None
+            return {"error": f"Run not found: {run_id!r}"}
         hyps = await store.list_hypotheses_by_run(rid)
         return {
             "id": str(run.id),
@@ -58,7 +58,7 @@ async def compare_runs(
         rid_b = uuid.UUID(run_id_b)
     except (ValueError, AttributeError):
         return {"error": f"Invalid run_id: {run_id_a!r} or {run_id_b!r}"}
-    async with _async_session_factory() as db:
+    async with async_session_factory() as db:
         store = RegistryStore(db)
         run_a = await store.get_run(rid_a)
         run_b = await store.get_run(rid_b)
@@ -102,7 +102,7 @@ async def list_runs(
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """Список последних прогонов в сессии."""
-    async with _async_session_factory() as db:
+    async with async_session_factory() as db:
         store = RegistryStore(db)
         runs = await store.list_runs_by_session(session_id, limit=limit)
         return [
@@ -139,7 +139,7 @@ async def search_similar_hypotheses(
     from ..registry.embeddings import Embedder
 
     embedder = Embedder()
-    async with _async_session_factory() as db:
+    async with async_session_factory() as db:
         store = RegistryStore(db)
         results = await store.search_by_text(text, embedder, limit=limit)
     return [

@@ -10,8 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aqr.pipeline import ChatPlanner, PipelineExecutor
-from aqr.pipeline.events import EventBus
+from aqr.pipeline import ResearchPlanner
 from aqr.pipeline.executor import BacktestResult, PipelineResult
 from aqr.pipeline.hypotheses import HypothesisSpec
 from aqr.pipeline.planner import ResearchPlan
@@ -37,7 +36,7 @@ def _fake_credentials():
 @pytest.fixture
 def active_credentials(monkeypatch):
     """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
 
     token = set_credentials(_fake_credentials())
     yield _fake_credentials()
@@ -59,11 +58,11 @@ def fake_litellm(monkeypatch):
 class TestPlannerRequiresCredentials:
     async def test_raises_without_credentials(self, monkeypatch):
         """Без active credentials → RuntimeError."""
-        from aqr.agent.context import current_credentials
+        from aqr.graph.context import current_credentials
 
         assert current_credentials() is None
 
-        planner = ChatPlanner()
+        planner = ResearchPlanner()
         with pytest.raises(RuntimeError, match="credentials not configured"):
             await planner.plan("проверь momentum на Сбере")
 
@@ -71,7 +70,7 @@ class TestPlannerRequiresCredentials:
 class TestNarratorRequiresCredentials:
     async def test_raises_without_credentials(self, monkeypatch):
         """Narrator без credentials → raise."""
-        from aqr.agent.context import current_credentials
+        from aqr.graph.context import current_credentials
 
         assert current_credentials() is None
 
@@ -119,7 +118,7 @@ class TestPlannerWithMockedLLM:
         )
         monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
 
-        plan = await ChatPlanner().plan("тест")
+        plan = await ResearchPlanner().plan("тест")
         assert plan.tickers == ["GAZP"]
         assert plan.timeframe == "H1"
         assert plan.hypothesis_families == ["breakout"]
@@ -132,7 +131,7 @@ class TestPlannerWithMockedLLM:
         fake_litellm.return_value.choices[0].message.content = "{}"
         monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
 
-        plan = await ChatPlanner().plan("тест")
+        plan = await ResearchPlanner().plan("тест")
         # Дефолты
         assert plan.tickers == ["SBER", "GAZP", "LKOH"]
         assert plan.timeframe == "D1"
@@ -143,7 +142,7 @@ class TestPlannerWithMockedLLM:
 class TestPipelineRequiresCredentials:
     async def test_pipeline_sends_settings_error(self, monkeypatch):
         """Без credentials в WS-handshake → 'Call /settings first'."""
-        from aqr.agent.context import current_credentials
+        from aqr.graph.context import current_credentials
 
         assert current_credentials() is None
 

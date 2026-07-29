@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from aqr import tasks
+from aqr.background import schedule
 
 from .analyst import AnalystAgent
 from .base import AgentResult
@@ -88,7 +88,7 @@ async def run_team(
     # Step 2: Browser (context gathering) — runs in parallel with analyst
     browser = BrowserAgent(session_id)
     try:
-        browser_task = tasks.schedule(browser.research(goal, plan))
+        browser_task = schedule(browser.research(goal, plan))
     except RuntimeError:
         # Task limit exceeded — run synchronously instead
         browser_task = browser.research(goal, plan)
@@ -112,7 +112,7 @@ async def run_team(
     try:
         context_result = await browser_task
     except Exception as exc:
-        context_result = AgentResult(ok=False, error=str(exc))
+        context_result = AgentResult(ok=False, error=f"BrowserAgent: {type(exc).__name__}")
     context_data = context_result.data if isinstance(context_result, AgentResult) and context_result.ok else {}
 
     # Collect analyst results

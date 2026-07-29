@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import sys
 import types
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -25,7 +25,7 @@ def fake_openai(monkeypatch):
     """
     from aqr.registry.embeddings import EMBEDDING_DIM
 
-    responses: dict[str, list[float]] = {}
+    _responses: dict[str, list[float]] = {}
 
     def make_embedding(text: str) -> list[float]:
         # Детерминированно из hash, но с разным seed для разных текстов
@@ -69,7 +69,7 @@ def fake_openai(monkeypatch):
 @pytest.fixture
 def with_credentials():
     """Устанавливает credentials в ContextVar с OPENAI_API_KEY."""
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
     from aqr.registry import DecryptedSettings
 
     creds = DecryptedSettings(

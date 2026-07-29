@@ -18,7 +18,7 @@ class EditorAgent(BaseAgent):
     async def plan(self, goal: str) -> AgentResult:
         """Break a goal into a ResearchPlan dictionary.
 
-        Uses the v0.3 `plan_research` tool which calls ChatPlanner + dedup.
+        Uses the v0.3 `plan_research` tool which calls ResearchPlanner + dedup.
         Raises on any failure — strict mode (AGENTS.md invariant 2).
         """
         tool = tool_registry.get("plan_research")

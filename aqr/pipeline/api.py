@@ -9,22 +9,25 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from aqr import tasks
-from aqr.db import get_db
+from aqr.background import schedule
+from aqr.session import get_db
 from aqr.registry import RegistryStore
 
-from .events import BUS
+from .events import BUS, Event
 from .executor import PipelineExecutor
-from .planner import ChatPlanner
+from .planner import ResearchPlanner
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
+
+_logger = logging.getLogger(__name__)
 
 
 class RunRequest(BaseModel):
@@ -71,7 +74,7 @@ async def start_run(
     db: AsyncSession = Depends(get_db),
 ) -> RunStarted:
     """Принять свободный запрос, спланировать, запустить исполнение в фоне."""
-    planner = ChatPlanner()
+    planner = ResearchPlanner()
     plan = await planner.plan(req.goal)
 
     # Генерируем UUID ОДИН раз — он должен совпадать в BUS и в БД (иначе FK-violation
@@ -99,7 +102,15 @@ async def start_run(
     await db.commit()
 
     # Фоновый запуск с сохранением результата (с retention — иначе GC)
-    tasks.schedule(_run_and_persist(run_id_str, plan, executor))
+    try:
+        schedule(_run_and_persist(run_id_str, plan, executor))
+    except RuntimeError:
+        await store.update_run_status(run_id, status="error")
+        await db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Превышен лимит фоновых задач. Попробуйте позже.",
+        )
 
     return RunStarted(
         run_id=run_id_str,
@@ -153,16 +164,26 @@ async def _run_and_persist(
     executor: PipelineExecutor,
 ) -> None:
     """Выполняет пайплайн в фоне и сохраняет результат в БД."""
-    from aqr.db import _async_session_factory
+    from aqr.session import async_session_factory
 
     try:
         result = await executor.run(run_id, plan)
-    except Exception:
-        # executor.run() уже эмитит error-событие, сохраняем статус
+    except Exception as exc:
+        # executor.run() мог упасть ДО эмита error-события.
+        # Эмитим событие явно, чтобы SSE-клиент видел причину.
+        _logger.exception("_run_and_persist: executor.run failed")
+        try:
+            await BUS.publish(Event(
+                run_id=run_id, kind="error", stage="executor",
+                message=f"executor.run: {type(exc).__name__}",
+                data={"exception": type(exc).__name__},
+            ))
+        except Exception:
+            _logger.exception("Failed to emit error event")
         result = None
 
     # Новая сессия для фоновой записи (request-сессия уже закрыта)
-    async with _async_session_factory() as db:
+    async with async_session_factory() as db:
         store = RegistryStore(db)
         run_uuid = uuid.UUID(run_id)
 
@@ -183,15 +204,21 @@ async def _run_and_persist(
             # работает локально и быстро, но gather всё равно корректен (PERF-8).
             from aqr.registry.embeddings import Embedder
             embedder = Embedder()
-            embeddings = await asyncio.gather(*[
+            embeddings_raw = await asyncio.gather(*[
                 embedder.embed_hypothesis(
                     r.hypothesis.family,
                     r.hypothesis.ticker,
                     r.hypothesis.params,
                 )
                 for r in result.top
-            ])
-            for r, embedding in zip(result.top, embeddings):
+            ], return_exceptions=True)
+            for r, emb in zip(result.top, embeddings_raw):
+                if isinstance(emb, Exception):
+                    _logger.exception(
+                        "embed_hypothesis failed for %s/%s: %s",
+                        r.hypothesis.family, r.hypothesis.ticker, emb,
+                    )
+                    continue
                 await store.create_hypothesis(
                     run_id=run_uuid,
                     family=r.hypothesis.family,
@@ -202,7 +229,7 @@ async def _run_and_persist(
                     sharpe=r.sharpe,
                     max_drawdown=r.max_drawdown,
                     is_valid=r.dsr_verdict in ("significant", "borderline"),
-                    embedding=embedding,
+                    embedding=emb,
                 )
         else:
             await store.update_run_status(run_uuid, status="error")

@@ -21,7 +21,7 @@ def _stable_secret(monkeypatch):
 @pytest.fixture
 def with_credentials():
     """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
     from aqr.registry import DecryptedSettings
 
     creds = DecryptedSettings(

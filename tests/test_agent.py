@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 from langgraph.graph import END
 
-from aqr.agent.graph import (
+from aqr.graph.graph import (
     AgentState,
     _deterministic_route,
     _has_llm_key,
@@ -28,7 +28,7 @@ def _stable_secret(monkeypatch):
 @pytest.fixture
 def with_credentials():
     """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.agent.context import reset_credentials, set_credentials
+    from aqr.graph.context import reset_credentials, set_credentials
     from aqr.registry import DecryptedSettings
 
     creds = DecryptedSettings(
@@ -98,8 +98,8 @@ def fake_openai(monkeypatch):
 
 @pytest.fixture
 def mock_db(monkeypatch):
-    """Мок _async_session_factory + DB."""
-    from aqr import db as db_mod
+    """Мок async_session_factory + DB."""
+    from aqr import session as db_mod
 
     class _FakeSession:
         async def __aenter__(self):
@@ -131,7 +131,7 @@ def mock_db(monkeypatch):
             return None
 
     factory = lambda: _FakeSession()
-    monkeypatch.setattr(db_mod, "_async_session_factory", factory)
+    monkeypatch.setattr(db_mod, "async_session_factory", factory)
     return factory
 
 # ── Graph structure tests ───────────────────────────────────────
@@ -369,7 +369,7 @@ class TestRunAgent:
         )
         from aqr.pipeline.executor import PipelineExecutor
 
-        executor = PipelineExecutor.__new__(PipelineExecutor)
+        PipelineExecutor.__new__(PipelineExecutor)
         # Прогон через run_agent требует чтобы litellm возвращал разное для plan/narrate.
         # На каждый вызов — наш mock вернёт одинаковый JSON. Planner парсит его.
         # Narrator ожидает plain text → mock вернёт JSON, Narrator вернёт строку-JSON.
@@ -451,28 +451,28 @@ class TestSessionContext:
     @pytest.mark.asyncio
     async def test_build_context_prompt_without_db_returns_empty(self):
         """Без Postgres build_context_prompt() не падает и возвращает строку."""
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
         ctx = SessionContext("test-no-db")
         prompt = await ctx.build_context_prompt()
         assert isinstance(prompt, str)
 
     @pytest.mark.asyncio
     async def test_get_recent_runs_without_db_returns_empty_list(self):
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
         ctx = SessionContext("test-no-db")
         runs = await ctx.get_recent_runs()
         assert runs == []
 
     @pytest.mark.asyncio
     async def test_get_best_strategy_without_db_returns_none(self):
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
         ctx = SessionContext("test-no-db")
         best = await ctx.get_best_strategy()
         assert best is None
 
     @pytest.mark.asyncio
     async def test_get_untested_combos_without_db_returns_empty_list(self):
-        from aqr.agent.context import SessionContext
+        from aqr.graph.context import SessionContext
         ctx = SessionContext("test-no-db")
         spots = await ctx.get_untested_combos()
         assert spots == []
@@ -486,7 +486,7 @@ class TestFollowUpRouting:
         """Без LLM-ключа _llm_route делегирует в _deterministic_route."""
         import os
 
-        from aqr.agent.graph import _llm_route
+        from aqr.graph.graph import _llm_route
         old = {k: os.environ.pop(k, None) for k in
                ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIGACHAT_CREDENTIALS", "AQR_LLM_MODEL")}
         try:
@@ -524,7 +524,7 @@ class TestFollowUpRouting:
 
         # Симулируем follow-up — пользователь хочет перепланировать
         # Состояние уже "done", значит route_node должен сбросить step и goal
-        from aqr.agent.graph import route_node
+        from aqr.graph.graph import route_node
         state: AgentState = {
             "messages": [
                 {"role": "user", "content": "проверь momentum на Сбере"},
@@ -546,7 +546,7 @@ class TestFollowUpRouting:
             "n_tested": 10,
             "n_survived": 3,
         }
-        result = await route_node(state)
+        await route_node(state)
         # route_node сбрасывает pipeline state и goal
         assert state["step"] == ""
         assert state["goal"] == "а теперь проверь mean reversion"
@@ -576,7 +576,7 @@ class TestFollowUpRouting:
         # Проверим косвенно: _llm_route должен корректно работать с пустым prompt
         import os
 
-        from aqr.agent.graph import _llm_route
+        from aqr.graph.graph import _llm_route
         old = {k: os.environ.pop(k, None) for k in
                ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GIGACHAT_CREDENTIALS", "AQR_LLM_MODEL")}
         try:

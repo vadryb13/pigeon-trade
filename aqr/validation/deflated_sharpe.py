@@ -52,8 +52,6 @@ def probabilistic_sharpe_ratio(
     if n < 3:
         return 0.5
 
-    sr_obs = _sharpe(r, annualization)
-
     # Периодический benchmark для сравнения с периодическим SR
     sr_bench_periodic = sr_benchmark / np.sqrt(annualization)
     sr_obs_periodic = r.mean() / r.std(ddof=1) if r.std(ddof=1) > 0 else 0.0

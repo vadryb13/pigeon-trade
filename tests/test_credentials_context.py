@@ -11,11 +11,11 @@ def _stable_secret(monkeypatch):
 
 class TestCredentialsContext:
     def test_current_credentials_default_none(self):
-        from aqr.agent.context import current_credentials
+        from aqr.graph.context import current_credentials
         assert current_credentials() is None
 
     def test_set_and_get(self):
-        from aqr.agent.context import (
+        from aqr.graph.context import (
             current_credentials,
             reset_credentials,
             set_credentials,
@@ -42,7 +42,7 @@ class TestCredentialsContext:
 
     def test_nested_set_resets_properly(self):
         """set вложенный — reset восстанавливает внешнее значение."""
-        from aqr.agent.context import (
+        from aqr.graph.context import (
             current_credentials,
             reset_credentials,
             set_credentials,
@@ -85,7 +85,7 @@ class TestCredentialsContext:
         """ContextVar изолирован между asyncio-задачами (важно для multi-session)."""
         import asyncio
 
-        from aqr.agent.context import (
+        from aqr.graph.context import (
             current_credentials,
             reset_credentials,
             set_credentials,

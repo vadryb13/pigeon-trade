@@ -59,7 +59,7 @@ class BrowserAgent(BaseAgent):
 
     async def _search_similar(self, text: str) -> list[dict]:
         """Search for similar hypotheses in registry by embedding."""
-        from aqr.db import _async_session_factory
+        from aqr.session import async_session_factory
         from aqr.registry.embeddings import Embedder
         from aqr.registry.store import RegistryStore
 
@@ -67,10 +67,11 @@ class BrowserAgent(BaseAgent):
             embedder = Embedder()
             emb = await embedder.embed(text)
         except Exception:
+            self.logger.exception("_search_similar: embed failed for %r", text)
             return []
 
         try:
-            async with _async_session_factory() as db:
+            async with async_session_factory() as db:
                 store = RegistryStore(db)
                 similar = await store.search_similar(emb, threshold=0.92, limit=5)
                 return [
@@ -84,6 +85,7 @@ class BrowserAgent(BaseAgent):
                     for h, sim in similar
                 ]
         except Exception:
+            self.logger.exception("_search_similar: DB query failed")
             return []
 
     async def _resolve_ticker_info(self, tickers: list[str]) -> dict[str, dict]:
@@ -103,6 +105,7 @@ class BrowserAgent(BaseAgent):
                     info[t] = {"figi": "", "ticker": t, "error": "not found"}
             return info
         except Exception:
+            self.logger.exception("_resolve_ticker_info failed")
             return {t: {"ticker": t} for t in tickers}
 
     async def _count_tested_families(self, tickers: list[str], families: list[str]) -> int:
@@ -110,7 +113,7 @@ class BrowserAgent(BaseAgent):
         if not tickers or not families:
             return 0
         try:
-            from aqr.agent.context import SessionContext
+            from aqr.graph.context import SessionContext
 
             ctx = SessionContext(self.session_id)
             recent = await ctx.get_recent_runs(50)
@@ -119,9 +122,9 @@ class BrowserAgent(BaseAgent):
             # Count unique (family, ticker) pairs across recent runs
             pairs: set[tuple[str, str]] = set()
             run_ids = [r.id for r in recent]
-            from aqr.db import _async_session_factory
+            from aqr.session import async_session_factory
             from aqr.registry.store import RegistryStore
-            async with _async_session_factory() as db:
+            async with async_session_factory() as db:
                 store = RegistryStore(db)
                 by_run = await store.list_hypotheses_by_runs(run_ids)
                 for hyps in by_run.values():
@@ -129,4 +132,5 @@ class BrowserAgent(BaseAgent):
                         pairs.add((h.family, h.ticker))
             return len(pairs)
         except Exception:
+            self.logger.exception("_count_tested_families failed")
             return 0

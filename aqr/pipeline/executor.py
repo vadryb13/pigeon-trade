@@ -67,7 +67,7 @@ class PipelineExecutor:
                 if ticker not in prices:
                     continue
                 validation_cfg = (
-                    plan.validation if isinstance(getattr(plan, "validation", None), dict) else {}
+                    plan.validation if isinstance(plan.validation, dict) else {}
                 )
                 bt_raw = await bt_tool.fn(
                     hypothesis=h,
@@ -144,9 +144,12 @@ class PipelineExecutor:
                 for obs in extra:
                     await self._emit(run_id, "insight", "Аналитик", obs, {"source": "llm"})
             except Exception:
-                # LLM-review — дополнительная фича. Если упало, эмитим warning,
-                # но не валим pipeline (детерминистичных инсайтов достаточно).
                 _logger.exception("review_insights failed")
+                await self._emit(
+                    run_id, "warning", "Аналитик",
+                    "LLM-review недоступен — показываем только детерминистичные инсайты.",
+                    {"source": "llm"},
+                )
 
             # Нарратив — через инструмент narrate
             nar_tool = tool_registry.get("narrate")
@@ -170,7 +173,7 @@ class PipelineExecutor:
                 _logger.exception("narrate failed")
                 await self._emit(
                     run_id, "error", "Нарратор",
-                    f"narrate failed: {e}",
+                    f"narrate failed: {type(e).__name__}",
                     {"exception": type(e).__name__},
                 )
                 raise
@@ -181,7 +184,7 @@ class PipelineExecutor:
             return result
 
         except Exception as e:
-            await self._emit(run_id, "error", "Ошибка", str(e),
+            await self._emit(run_id, "error", "Ошибка", type(e).__name__,
                              {"exception": type(e).__name__})
             raise
 

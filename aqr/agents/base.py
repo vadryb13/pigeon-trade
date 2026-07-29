@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from aqr.agent.context import current_credentials
+from aqr.graph.context import current_credentials
 
 logger = logging.getLogger(__name__)
 

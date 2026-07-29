@@ -1,7 +1,6 @@
 """Тесты health-check эндпоинтов /health и /health/ready."""
 from __future__ import annotations
 
-import pytest
 
 
 class TestHealthLive:

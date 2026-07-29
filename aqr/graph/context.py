@@ -13,12 +13,11 @@ from __future__ import annotations
 
 import logging
 from contextvars import ContextVar
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from typing import Any
-
-from ..db import _async_session_factory
+from ..session import async_session_factory
 from ..registry import DecryptedSettings, RegistryStore
 
 # ── Per-session credentials ─────────────────────────────────────
@@ -57,7 +56,7 @@ class SessionContext:
     async def get_recent_runs(self, limit: int = 5) -> list[dict[str, Any]]:
         """Последние прогоны в сессии. Пустой список, если БД недоступна."""
         try:
-            async with _async_session_factory() as db:
+            async with async_session_factory() as db:
                 store = RegistryStore(db)
                 runs = await store.list_runs_by_session(self.session_id, limit=limit)
                 return [
@@ -76,7 +75,7 @@ class SessionContext:
     async def get_best_strategy(self) -> dict[str, Any] | None:
         """Лучшая гипотеза по DSR среди всех прогонов сессии. None, если БД недоступна."""
         try:
-            async with _async_session_factory() as db:
+            async with async_session_factory() as db:
                 store = RegistryStore(db)
                 runs = await store.list_runs_by_session(self.session_id, limit=20)
                 if not runs:
@@ -111,7 +110,7 @@ class SessionContext:
         Возвращает до 5 предложений что можно проверить. Пустой список без БД.
         """
         try:
-            async with _async_session_factory() as db:
+            async with async_session_factory() as db:
                 store = RegistryStore(db)
                 runs = await store.list_runs_by_session(self.session_id, limit=50)
                 if not runs:

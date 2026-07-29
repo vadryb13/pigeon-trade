@@ -15,6 +15,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
+# Размерность вектора эмбеддинга. Должна совпадать с Vector(N) в models.py.
+# Менять синхронно: здесь, в models.py (Vector(N)), и через ALTER TABLE.
+EMBEDDING_DIM = 768
+
 if TYPE_CHECKING:
     # Аннотации типов для IDE/static-checkers — runtime не нужен импорт,
     # потому что dataclasses используют только type hints и forward-refs.

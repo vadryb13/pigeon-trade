@@ -1,12 +1,12 @@
 """Tests for v0.4 API endpoints."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from aqr.agent.context import reset_credentials, set_credentials
+from aqr.graph.context import reset_credentials, set_credentials
 from aqr.registry import DecryptedSettings
 
 

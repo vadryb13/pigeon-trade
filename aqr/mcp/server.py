@@ -16,8 +16,6 @@ import logging
 from typing import Any
 
 from .protocol import (
-    INTERNAL_ERROR,
-    INVALID_PARAMS,
     METHOD_NOT_FOUND,
     MCPError,
     error_response,
@@ -66,19 +64,10 @@ class MCPHandler:
                 MCPError(code=-32602, message=f"Invalid params: {exc}"),
                 req_id,
             )
-        except Exception as exc:
+        except Exception:
             logger.exception("MCP method %s failed", method)
-            exc_str = str(exc)
-            for key in ("api_key", "token", "secret", "password", "credential"):
-                import re
-                exc_str = re.sub(
-                    rf'({key})["\']?\s*[:=]\s*["\']?[^"\',\s}}]+',
-                    r"\1=***",
-                    exc_str,
-                    flags=re.IGNORECASE,
-                )
             return error_response(
-                MCPError(code=-32603, message=exc_str),
+                MCPError(code=-32603, message="Internal error"),
                 req_id,
             )
 
@@ -122,14 +111,14 @@ class MCPHandler:
 
         Uses OpenAI embeddings + pgvector cosine similarity.
         """
-        from aqr.db import _async_session_factory
+        from aqr.session import async_session_factory
         from aqr.registry.embeddings import Embedder
         from aqr.registry.store import RegistryStore
 
         embedder = Embedder()
         emb = await embedder.embed(text)
 
-        async with _async_session_factory() as db:
+        async with async_session_factory() as db:
             store = RegistryStore(db)
             similar = await store.search_similar(emb, threshold=threshold, limit=limit)
 

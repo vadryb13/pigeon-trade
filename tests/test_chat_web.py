@@ -13,7 +13,7 @@ def _stable_secret(monkeypatch):
 @pytest.fixture(autouse=True)
 def _mock_db(monkeypatch):
     """Мок БД для WS integration-теста ниже."""
-    from aqr import db as db_mod
+    from aqr import session as db_mod
     from aqr.chat import ws as ws_mod
 
     class _S:
@@ -32,8 +32,8 @@ def _mock_db(monkeypatch):
         def __call__(self):
             return _S()
 
-    monkeypatch.setattr(db_mod, "_async_session_factory", _F())
-    monkeypatch.setattr(ws_mod, "_async_session_factory", _F())
+    monkeypatch.setattr(db_mod, "async_session_factory", _F())
+    monkeypatch.setattr(ws_mod, "async_session_factory", _F())
 
     # Мок _load_credentials чтобы WS-handshake не падал
     from aqr.chat import ws as ws_mod

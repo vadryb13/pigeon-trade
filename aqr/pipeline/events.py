@@ -7,8 +7,8 @@ Event bus — публикация событий во время исполне
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
+import logging
 import math
 import time
 from collections.abc import AsyncIterator
@@ -81,8 +81,13 @@ class EventBus:
         async with self._lock:
             self._history.setdefault(event.run_id, []).append(event)
             for q in self._subscribers.get(event.run_id, []):
-                with contextlib.suppress(asyncio.QueueFull):
+                try:
                     q.put_nowait(event)
+                except asyncio.QueueFull:
+                    logging.getLogger(__name__).warning(
+                        "SSE queue full for run_id=%s, dropping event kind=%s",
+                        event.run_id, event.kind,
+                    )
             if event.kind in ("done", "error"):
                 done = self._done.get(event.run_id)
                 if done:

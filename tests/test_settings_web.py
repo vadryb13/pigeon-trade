@@ -12,8 +12,7 @@ def _stable_secret(monkeypatch):
 
 @pytest.fixture
 def mock_db(monkeypatch):
-    """Мок _async_session_factory с in-memory store для SessionSettings."""
-    from aqr.registry import SessionSettings
+    """Мок async_session_factory с in-memory store для SessionSettings."""
 
     class _FakeSession:
         def __init__(self):
@@ -45,7 +44,7 @@ def mock_db(monkeypatch):
         def __call__(self):
             return db
 
-    monkeypatch.setattr("aqr.chat.web._async_session_factory", _Factory())
+    monkeypatch.setattr("aqr.chat.web.async_session_factory", _Factory())
     return db
 
 
