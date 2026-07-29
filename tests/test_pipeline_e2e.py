@@ -63,7 +63,7 @@ class TestPlannerRequiresCredentials:
         assert current_credentials() is None
 
         planner = ResearchPlanner()
-        with pytest.raises(RuntimeError, match="credentials not configured"):
+        with pytest.raises(RuntimeError, match="no credentials available"):
             await planner.plan("проверь momentum на Сбере")
 
 
@@ -101,7 +101,7 @@ class TestNarratorRequiresCredentials:
         from aqr.pipeline import Narrator
 
         narrator = Narrator()
-        with pytest.raises(RuntimeError, match="credentials not configured"):
+        with pytest.raises(RuntimeError, match="no credentials available"):
             await narrator.narrate(result)
 
 

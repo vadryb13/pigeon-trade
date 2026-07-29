@@ -51,4 +51,4 @@ class TestHealthReady:
         assert r.status_code == 503
         data = r.json()
         assert data["status"] == "degraded"
-        assert "DATABASE_URL" in data["error"]
+        assert data["error"] == "runtime validation failed"

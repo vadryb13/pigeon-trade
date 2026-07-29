@@ -49,7 +49,7 @@ def tinvest_counter(monkeypatch):
         def __init__(self, *a, **kw):
             pass
 
-        def candles(self, ticker, *a, **kw):
+        async def candles(self, ticker, *a, **kw):
             counter["n"] += 1
             rng = np.random.default_rng(hash(ticker) % (2**32))
             n = 500

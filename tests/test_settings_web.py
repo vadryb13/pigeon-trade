@@ -97,7 +97,7 @@ class TestSettingsPageGET:
         client = TestClient(app)
         r = client.get(f"/chat/{alice_token}/settings", follow_redirects=False)
         assert r.status_code == 303
-        assert r.headers["location"] == f"/chat/{alice_token}"
+        assert r.headers["location"] == "/chat"
 
     def test_invalid_token_returns_403(self, mock_db):
         from fastapi.testclient import TestClient
@@ -128,7 +128,7 @@ class TestSettingsPagePOST:
             follow_redirects=False,
         )
         assert r.status_code == 303
-        assert r.headers["location"] == f"/chat/{alice_token}"
+        assert r.headers["location"] == "/chat"
 
         from aqr.registry import SessionSettings
 

@@ -345,6 +345,7 @@ class TestCredentialsRequired:
         from aqr.graph.context import current_credentials
 
         assert current_credentials() is None
+        monkeypatch.delenv("INVEST_TOKEN", raising=False)
 
         from aqr.data.tinvest import TInvestAdapter
 

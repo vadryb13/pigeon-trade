@@ -87,11 +87,12 @@ def with_credentials():
 
 class TestEmbedderRequiresKey:
     async def test_raises_without_api_key_and_without_credentials(self):
-        """Без api_key параметром и без ContextVar → RuntimeError."""
+        """Без api_key параметром и без ContextVar → RuntimeError при embed()."""
         from aqr.registry.embeddings import Embedder
 
-        with pytest.raises(RuntimeError, match="OPENAI_API_KEY not provided"):
-            Embedder()
+        embedder = Embedder()
+        with pytest.raises(RuntimeError, match="no API key available"):
+            await embedder.embed("test")
 
     async def test_accepts_explicit_api_key(self, fake_openai):
         """Переданный api_key явно → ok, без credentials."""
@@ -99,7 +100,7 @@ class TestEmbedderRequiresKey:
 
         embedder = Embedder(api_key="sk-explicit")
         v = await embedder.embed("test text")
-        assert len(v) == 1536
+        assert len(v) == 768
 
     async def test_uses_credentials_when_no_api_key(self, fake_openai, with_credentials):
         """Без параметра → берёт openai_api_key из ContextVar."""
@@ -107,7 +108,7 @@ class TestEmbedderRequiresKey:
 
         embedder = Embedder()
         v = await embedder.embed("test text")
-        assert len(v) == 1536
+        assert len(v) == 768
 
 
 class TestEmbedderEmbed:
@@ -116,7 +117,7 @@ class TestEmbedderEmbed:
 
         embedder = Embedder()
         v = await embedder.embed("any text")
-        assert len(v) == EMBEDDING_DIM == 1536
+        assert len(v) == EMBEDDING_DIM == 768
 
     async def test_deterministic_for_same_text(self, fake_openai, with_credentials):
         from aqr.registry.embeddings import Embedder

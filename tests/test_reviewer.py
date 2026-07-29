@@ -114,7 +114,7 @@ async def test_reviewer_raises_without_credentials(monkeypatch):
     assert current_credentials() is None
 
     reviewer = InsightReviewer()
-    with pytest.raises(RuntimeError, match="credentials not configured"):
+    with pytest.raises(RuntimeError, match="no credentials available"):
         await reviewer.review(_fake_result(), ["test"])
 
 

@@ -196,7 +196,7 @@ class TestLoadPricesIntegration:
             def __init__(self, *a, **kw):
                 pass
 
-            def candles(self, ticker, *a, **kw):
+            async def candles(self, ticker, *a, **kw):
                 call_count["n"] += 1
                 if call_count["n"] > 1:
                     raise RuntimeError("Second call should hit cache, not T-Invest")

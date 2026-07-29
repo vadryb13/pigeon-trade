@@ -34,7 +34,7 @@ try:
 
     _env_file = Path(__file__).resolve().parent.parent / ".env"
     if _env_file.exists():
-        load_dotenv(_env_file, override=True)
+        load_dotenv(_env_file, override=False)
 except ImportError:
     pass
 
