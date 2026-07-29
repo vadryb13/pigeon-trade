@@ -128,7 +128,7 @@ def mock_agent(monkeypatch):
     def fake_get_agent():
         return _FakeAgent()
 
-    monkeypatch.setattr("aqr.agent.graph.get_agent", fake_get_agent)
+    monkeypatch.setattr("aqr.graph.graph.get_agent", fake_get_agent)
     monkeypatch.setattr("aqr.chat.ws.get_agent", fake_get_agent)
     return _FakeAgent
 

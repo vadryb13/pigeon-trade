@@ -38,7 +38,7 @@ class _LazySessionFactory:
 async_session_factory = _LazySessionFactory()
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """FastAPI-зависимость: yield асинхронной сессии БД."""
     async with async_session_factory() as session:
         try:
