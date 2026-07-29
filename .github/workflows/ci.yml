@@ -27,6 +27,8 @@ jobs:
           python -m pip install --upgrade pip
           # Все extras — иначе storage/embedding/cache тесты молча отключаются (TESTS-4)
           pip install -e ".[dev,llm,data,embeddings]"
+          # T-Invest gRPC — закрытый PyPI T-Bank
+          pip install t-tech-investments --index-url https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple
           pip install pytest-cov
 
       - name: Lint with ruff

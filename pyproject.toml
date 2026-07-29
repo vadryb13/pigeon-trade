@@ -36,8 +36,6 @@ dependencies = [
     "cryptography>=42",
     # Agent (LangGraph)
     "langgraph>=0.2",
-    # T-Invest gRPC (закрытый PyPI T-Bank — см. AGENTS.md gotcha)
-    "t-tech-investments",
 ]
 
 [project.optional-dependencies]
@@ -66,6 +64,11 @@ v04_screener = [
 ]
 v04_executor = [
     "nautilus_trader>=1.220",
+]
+# T-Invest gRPC — закрытый PyPI T-Bank, устанавливается отдельно:
+#   pip install t-tech-investments --index-url https://opensource.tbank.ru/api/v4/projects/238/packages/pypi/simple
+tinvest = [
+    "t-tech-investments",
 ]
 
 [project.urls]
