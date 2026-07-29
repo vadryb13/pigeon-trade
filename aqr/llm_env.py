@@ -30,6 +30,7 @@ _LLM_ENV_KEYS = (
     "OPENAI_API_KEY",
     "GIGACHAT_CREDENTIALS",
     "DEEPSEEK_API_KEY",
+    "GEMINI_API_KEY",
 )
 
 
@@ -46,6 +47,7 @@ _PROVIDER_ENV_MAP: list[tuple[str, str]] = [
     ("anthropic", "ANTHROPIC_API_KEY"),
     ("gigachat", "GIGACHAT_CREDENTIALS"),
     ("deepseek", "DEEPSEEK_API_KEY"),
+    ("gemini", "GEMINI_API_KEY"),
 ]
 
 
