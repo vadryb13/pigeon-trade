@@ -267,6 +267,8 @@ class TestBrowserAgent:
         assert result.ok
         assert "similar_runs" in result.data
         assert "ticker_info" in result.data
+        assert isinstance(result.data["ticker_info"], dict)
+        assert "SBER" in result.data["ticker_info"]
 
     @pytest.mark.asyncio
     async def test_research_ticker_info(self, with_credentials, mock_db, mock_openai, mock_tinvest):
@@ -461,6 +463,8 @@ class TestRunTeam:
         )
         assert result.ok
         assert "GAZP" in str(result.plan)
+        assert result.plan["tickers"] == ["GAZP"]
+        assert result.plan["hypothesis_families"] == ["momentum"]
 
     @pytest.mark.asyncio
     async def test_run_team_error_propagation(self, with_credentials, fake_tool_registry):

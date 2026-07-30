@@ -644,6 +644,8 @@ class TestReviewInsights:
             deterministic_insights=["тестовый инсайт"],
         )
         assert isinstance(result, list)
+        assert len(result) > 0
+        assert isinstance(result[0], str)
 
 
 # ── narrate ─────────────────────────────────────────────────────
@@ -653,8 +655,8 @@ class TestNarrate:
     async def test_narrate_returns_string(
         self, monkeypatch, with_credentials, fake_litellm
     ):
-        """С credentials + мок-LLM → текст нарратива."""
-        fake_litellm("Тестовый нарратив от LLM про momentum стратегию.")
+        """С credentials + мок-LLM → текст нарратива, содержащий ключевые слова."""
+        fake_litellm("Рекомендация: использовать momentum стратегию SMA10/50 на Сбере.")
         monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
 
         tool = registry.get("narrate")
@@ -676,3 +678,5 @@ class TestNarrate:
         )
         assert isinstance(result, str)
         assert len(result) > 10
+        assert "SMA10/50" in result
+        assert "Сбер" in result

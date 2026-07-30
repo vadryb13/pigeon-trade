@@ -147,12 +147,14 @@ class TestPlannerWithMockedLLM:
 
 class TestPipelineRequiresCredentials:
     async def test_pipeline_sends_settings_error(self, monkeypatch):
-        """Без credentials в WS-handshake → 'Call /settings first'."""
+        """Без credentials — planner и narrator падают (проверяется в отдельных классах)."""
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from aqr.graph.context import current_credentials
 
         assert current_credentials() is None
 
-        # Сам pipeline-executor не вызывается — он в WS-handler,
-        # который проверяет credentials перед _run_agent_for_session.
-        # Этот тест — заглушка для гарантии что credentials обязательны.
-        assert True
+        planner = ResearchPlanner()
+        with pytest.raises(RuntimeError, match="no credentials available"):
+            await planner.plan("тест")

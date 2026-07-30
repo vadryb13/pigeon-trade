@@ -29,11 +29,31 @@ def synthetic_prices():
 
 
 class TestVectorBTScreener:
-    def test_import_succeeds(self):
-        """Модуль импортируется без ошибок."""
-        from aqr.screener import VariantResult, screen_momentum
-        assert callable(screen_momentum)
-        assert VariantResult is not None
+    def test_import_succeeds(self, synthetic_prices):
+        """screen_momentum вызывается без ошибок с минимальными параметрами."""
+        from aqr.screener import screen_momentum
+
+        result = screen_momentum(
+            "SBER",
+            fast_range=(10, 15, 10),
+            slow_range=(25, 35, 10),
+            top_n=3,
+            candles=pd.DataFrame(
+                {"close": synthetic_prices, "open": synthetic_prices,
+                 "high": synthetic_prices, "low": synthetic_prices,
+                 "volume": [0] * len(synthetic_prices)},
+                index=pd.date_range("2023-01-02", periods=len(synthetic_prices), freq="B"),
+            ),
+        )
+        assert isinstance(result, list)
+        assert len(result) > 0
+        assert len(result) <= 3
+        for r in result:
+            assert "fast" in r
+            assert "slow" in r
+            assert "sharpe" in r
+            assert "ticker" in r
+            assert r["ticker"] == "SBER"
 
     def test_screen_momentum_returns_sorted_results(self, synthetic_prices):
         """screen_momentum возвращает список отсортированный по Sharpe desc."""

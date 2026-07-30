@@ -360,28 +360,21 @@ class TestRunAgent:
         - TInvestAdapter: candles
         - DB: пустой dedup
         """
-        # Последний вызов litellm (narrator) возвращает нарратив,
-        # остальные — JSON для planner/insights.
-        # mock возвращает одинаковый контент; узел interpret'ит по-разному.
         fake_litellm(
             '{"tickers": ["SBER"], "hypothesis_families": ["momentum"], '
             '"n_hypotheses": 8, "rationale": "тест", "observations": []}'
         )
-        from aqr.pipeline.executor import PipelineExecutor
-
-        PipelineExecutor.__new__(PipelineExecutor)
-        # Прогон через run_agent требует чтобы litellm возвращал разное для plan/narrate.
-        # На каждый вызов — наш mock вернёт одинаковый JSON. Planner парсит его.
-        # Narrator ожидает plain text → mock вернёт JSON, Narrator вернёт строку-JSON.
-        # Это OK для теста — мы проверяем pipeline mechanics, не содержание.
         result = await run_agent(
             message="проверь momentum на Сбере",
             session_id="test-agent-e2e",
         )
         assert "response" in result
-        # Pipeline отработал без критических ошибок
-        # (narrator может вернуть мусор из-за одинакового mock — это OK)
-        assert result.get("plan") is not None or result.get("error") is not None
+        assert result.get("plan") is not None, "plan must be present when pipeline succeeds"
+        assert "error" not in result or result["error"] is None
+        assert isinstance(result["plan"], dict)
+        assert "tickers" in result["plan"]
+        assert "hypothesis_families" in result["plan"]
+        assert result["plan"]["tickers"] == ["SBER"]
 
     @pytest.mark.asyncio
     async def test_run_agent_returns_plan(
@@ -396,11 +389,12 @@ class TestRunAgent:
             message="проверь mean reversion на Газпроме",
             session_id="test-agent-plan",
         )
-        # Plan должен быть (либо result['plan'], либо внутри narrative в крайнем случае)
-        if result.get("plan") is not None:
-            plan = result["plan"]
-            assert "tickers" in plan
-            assert "hypothesis_families" in plan
+        assert result.get("plan") is not None
+        plan = result["plan"]
+        assert "tickers" in plan
+        assert "hypothesis_families" in plan
+        assert plan["tickers"] == ["GAZP"]
+        assert "mean_reversion" in plan["hypothesis_families"]
 
     @pytest.mark.asyncio
     async def test_run_agent_with_unknown_goal(
@@ -416,33 +410,46 @@ class TestRunAgent:
             session_id="test-agent-unknown",
         )
         assert "response" in result
-        # Без crash; может быть error в narrative но не в response
+        assert isinstance(result["response"], str)
+        assert len(result["response"]) > 0
 
     @pytest.mark.asyncio
     async def test_run_agent_multiple_runs(
         self, with_credentials, fake_litellm, fake_tinvest, fake_openai, mock_db
     ):
-        """Два прогона с разными goals → разные планы (momentum vs volatility)."""
-        # Planner получит один и тот же JSON от мок-LLM, но семантика теста —
-        # что pipeline отрабатывает без падения. Содержание плана фиксировано.
+        """Два прогона с разными goals → оба отрабатывают без падения."""
         fake_litellm(
             '{"tickers": ["SBER"], "hypothesis_families": ["momentum"], '
             '"n_hypotheses": 8}'
         )
         r1 = await run_agent("проверь breakout на Сбере", "test-agent-1")
         r2 = await run_agent("проверь volatility на Сбере", "test-agent-2")
-        # Оба отработали — pipeline не упал
         assert "response" in r1
         assert "response" in r2
+        assert isinstance(r1["response"], str)
+        assert isinstance(r2["response"], str)
+        assert r1["plan"] is not None
+        assert r2["plan"] is not None
 
 
 # ── Helper tests ────────────────────────────────────────────────
 
 class TestHelpers:
-    def test_has_llm_key_returns_bool(self):
-        """_has_llm_key returns a boolean."""
-        result = _has_llm_key()
-        assert isinstance(result, bool)
+    def test_has_llm_key_without_keys(self, monkeypatch):
+        """_has_llm_key returns False when no keys are set."""
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GIGACHAT_CREDENTIALS", raising=False)
+        assert _has_llm_key() is False
+
+    def test_has_llm_key_with_key(self, monkeypatch):
+        """_has_llm_key returns True when OPENAI_API_KEY is set."""
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("GIGACHAT_CREDENTIALS", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-123")
+        assert _has_llm_key() is True
 
 
 # ── SessionContext tests ──────────────────────────────────────
@@ -450,11 +457,12 @@ class TestHelpers:
 class TestSessionContext:
     @pytest.mark.asyncio
     async def test_build_context_prompt_without_db_returns_empty(self):
-        """Без Postgres build_context_prompt() не падает и возвращает строку."""
+        """Без Postgres build_context_prompt() не падает и возвращает пустую строку."""
         from aqr.graph.context import SessionContext
         ctx = SessionContext("test-no-db")
         prompt = await ctx.build_context_prompt()
         assert isinstance(prompt, str)
+        assert prompt == ""
 
     @pytest.mark.asyncio
     async def test_get_recent_runs_without_db_returns_empty_list(self):
@@ -604,3 +612,37 @@ class TestFollowUpRouting:
             for k, v in old.items():
                 if v is not None:
                     os.environ[k] = v
+
+    @pytest.mark.asyncio
+    async def test_llm_route_parses_action_from_json(self, fake_litellm, monkeypatch):
+        """LLM возвращает {"action": "plan"} — роутер направляет в plan."""
+        fake_litellm('{"action": "plan"}')
+        monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+
+        from aqr.graph.graph import _llm_route
+        state: AgentState = {
+            "messages": [{"role": "user", "content": "перепланируй"}],
+            "session_id": "test",
+            "goal": "проверь momentum",
+            "plan": {"tickers": ["SBER"]},
+            "step": "respond",
+            "error": None,
+            "elapsed_seconds": 1.0,
+            "n_tested": 5,
+            "n_survived": 2,
+        }
+        result = await _llm_route(state)
+        assert result == "plan"
+
+    @pytest.mark.asyncio
+    async def test_llm_route_done_skip_llm(self):
+        """step='done' — _llm_route возвращает END без вызова LLM."""
+        from aqr.graph.graph import END, _llm_route
+        state: AgentState = {
+            "messages": [{"role": "user", "content": "привет"}],
+            "session_id": "test",
+            "step": "done",
+        }
+        result = await _llm_route(state)
+        assert result == END

@@ -215,17 +215,17 @@ class TestRunAndPersist:
             async def run(self, run_id, plan):
                 raise RuntimeError("pipeline crashed")
 
-        # Не должно быть исключения
         await _run_and_persist(
             str(uuid.uuid4()),
             MagicMock(),
             _FailingExec(),
         )
 
-        # update_run_status вызвался с status="error"
         assert mock_db.update_run_status.called
-        # Берём последний вызов
-        call = mock_db.update_run_status.call_args_list[-1]
-        # kwargs может быть пустым, args[1] = status
-        status_value = call.kwargs.get("status") if call.kwargs else call.args[1] if len(call.args) > 1 else None
-        assert status_value == "error"
+        all_kwargs = {}
+        for call in mock_db.update_run_status.call_args_list:
+            all_kwargs.update(call.kwargs)
+        all_kwargs.update({f"pos_{i}": v for i, v in enumerate(call.args) if call.args})
+        assert any(
+            v == "error" for v in all_kwargs.values() if isinstance(v, str)
+        ), f"update_run_status not called with status='error': {mock_db.update_run_status.call_args_list}"

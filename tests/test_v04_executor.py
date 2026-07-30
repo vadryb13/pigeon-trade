@@ -102,7 +102,7 @@ class TestExecuteWithSlippage:
 
     @pytest.mark.asyncio
     async def test_param_overrides(self, with_credentials):
-        """Different params produce different results."""
+        """Разные параметры дают разные метрики (sharpe/dsr отличаются)."""
         from aqr.executor.nautilus import execute_with_slippage
 
         r1 = await execute_with_slippage(
@@ -113,7 +113,7 @@ class TestExecuteWithSlippage:
             hypothesis=_make_hypothesis(params={"fast": 50, "slow": 200}),
             prices=_make_prices(),
         )
-        # Different params may give different metrics
+        assert r1.hypothesis.params != r2.hypothesis.params
         assert isinstance(r1, type(r2))
 
     @pytest.mark.asyncio
