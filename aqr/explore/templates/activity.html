@@ -152,9 +152,9 @@ blockquote {
 </div>
 
 <div class="stats">
-  <span>Total events <strong id="stat-events">24</strong></span>
-  <span>Unique hypotheses <strong id="stat-hyps">12</strong></span>
-  <span>Unique users <strong id="stat-users">3</strong></span>
+  <span>Total events <strong id="stat-events">—</strong></span>
+  <span>Unique hypotheses <strong id="stat-hyps">—</strong></span>
+  <span>Unique users <strong id="stat-users">—</strong></span>
   <span class="chip">Last 7 days</span>
 </div>
 
@@ -172,315 +172,100 @@ blockquote {
 </div>
 
 <div class="feed" id="feed">
-
-  <!-- Today · 2026-07-30 -->
-  <div class="day-divider">Today · 2026-07-30</div>
-
-  <div class="event" data-type="rerun" data-hyp="42" data-user="alice">
-    <div class="ts">14:23</div>
-    <div class="event-body">
-      <div>
-        <span class="act-rerun"><span class="event-icon">⟳</span><span class="event-label">rerun</span></span>
-        <span class="who">alice</span> on <span class="target">#42 SMA5/50 momentum on SBER</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{fast:5, slow:50}</span> →
-        Sharpe <span class="num up">1.92</span> · DSR <span class="num">0.94</span> · PBO <span class="num">0.32</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="comment" data-hyp="42" data-user="bob">
-    <div class="ts">12:47</div>
-    <div class="event-body">
-      <div>
-        <span class="act-comment"><span class="event-icon">💬</span><span class="event-label">comment</span></span>
-        <span class="who">bob</span> on <span class="target">#42</span>
-      </div>
-      <div class="what">
-        <blockquote>стабильно в боковике, проверить на 4ч</blockquote>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="approve" data-hyp="42" data-user="alice">
-    <div class="ts">11:05</div>
-    <div class="event-body">
-      <div>
-        <span class="act-approve"><span class="event-icon">✓</span><span class="event-label">approve</span></span>
-        <span class="who">alice</span> on <span class="target">#42 SMA5/50 momentum on SBER</span>
-      </div>
-      <div class="metrics what">
-        screening → approved
-      </div>
-    </div>
-  </div>
-
-  <div class="event system-event" data-type="status" data-hyp="38" data-user="system">
-    <div class="ts">09:30</div>
-    <div class="event-body">
-      <div>
-        <span class="act-status"><span class="event-icon">⤴</span><span class="event-label">status</span></span>
-        <span class="who actor-system">system</span> on <span class="target">#38 RSI(14)+ATR on GAZP</span>
-      </div>
-      <div class="metrics what">
-        idea <span class="diff">→</span> screening (auto: backtest Sharpe 1.10 &gt; 0)
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="create" data-hyp="51" data-user="alice">
-    <div class="ts">08:12</div>
-    <div class="event-body">
-      <div>
-        <span class="act-create"><span class="event-icon">+</span><span class="event-label">create</span></span>
-        <span class="who">alice</span> on <span class="target">#51 Donchian 20/55 on GAZP</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{family: breakout, ticker: GAZP, period: 20, exit: 55}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="ai" data-hyp="38" data-user="bob">
-    <div class="ts">07:44</div>
-    <div class="event-body">
-      <div>
-        <span class="act-ai"><span class="event-icon">🤖</span><span class="event-label">AI</span></span>
-        <span class="who">bob</span> on <span class="target">#38</span>
-      </div>
-      <div class="what">
-        <blockquote>PBO 0.45 на OOS: стратегия выглядит устойчивой в тренде, но проседает на боковике. Рекомендую добавить фильтр волатильности или остановить research.</blockquote>
-      </div>
-    </div>
-  </div>
-
-  <!-- Yesterday · 2026-07-29 -->
-  <div class="day-divider">Yesterday · 2026-07-29</div>
-
-  <div class="event" data-type="edit" data-hyp="42" data-user="alice">
-    <div class="ts">22:18</div>
-    <div class="event-body">
-      <div>
-        <span class="act-edit"><span class="event-icon">✎</span><span class="event-label">edit</span></span>
-        <span class="who">alice</span> on <span class="target">#42</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{fast: 5 → 8, slow: 50 → 55}</span> →
-        Sharpe <span class="num up">1.92</span> · DSR <span class="num">0.94</span> · PBO <span class="num">0.32</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="reject" data-hyp="35" data-user="alice">
-    <div class="ts">16:05</div>
-    <div class="event-body">
-      <div>
-        <span class="act-reject"><span class="event-icon">✗</span><span class="event-label">reject</span></span>
-        <span class="who">alice</span> on <span class="target">#35 BBands breakout on LKOH</span>
-      </div>
-      <div class="what">
-        <blockquote>PBO 0.62 — переобучен на коротком периоде, не подходит для live</blockquote>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="create" data-hyp="42" data-user="alice">
-    <div class="ts">14:23</div>
-    <div class="event-body">
-      <div>
-        <span class="act-create"><span class="event-icon">+</span><span class="event-label">create</span></span>
-        <span class="who">alice</span> on <span class="target">#42 SMA5/50 momentum on SBER</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{family: momentum, ticker: SBER, fast: 5, slow: 50}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="rerun" data-hyp="38" data-user="bob">
-    <div class="ts">11:42</div>
-    <div class="event-body">
-      <div>
-        <span class="act-rerun"><span class="event-icon">⟳</span><span class="event-label">rerun</span></span>
-        <span class="who">bob</span> on <span class="target">#38 RSI(14)+ATR on GAZP</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{rsi_period: 14, atr_mult: 2.0}</span> →
-        Sharpe <span class="num">1.10</span> · DSR <span class="num">0.71</span> · PBO <span class="num">0.45</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event system-event" data-type="status" data-hyp="35" data-user="system">
-    <div class="ts">09:11</div>
-    <div class="event-body">
-      <div>
-        <span class="act-status"><span class="event-icon">⤴</span><span class="event-label">status</span></span>
-        <span class="who actor-system">system</span> on <span class="target">#35 BBands breakout on LKOH</span>
-      </div>
-      <div class="metrics what">
-        screening <span class="diff">→</span> rejected (auto: PBO 0.62 &gt; threshold 0.50)
-      </div>
-    </div>
-  </div>
-
-  <!-- 3 days ago · 2026-07-27 -->
-  <div class="day-divider">3 days ago · 2026-07-27</div>
-
-  <div class="event" data-type="comment" data-hyp="29" data-user="bob">
-    <div class="ts">18:30</div>
-    <div class="event-body">
-      <div>
-        <span class="act-comment"><span class="event-icon">💬</span><span class="event-label">comment</span></span>
-        <span class="who">bob</span> on <span class="target">#29</span>
-      </div>
-      <div class="what">
-        <blockquote>попробовать other timeframe — на H4 моментум сильнее</blockquote>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="ai" data-hyp="29" data-user="alice">
-    <div class="ts">15:22</div>
-    <div class="event-body">
-      <div>
-        <span class="act-ai"><span class="event-icon">🤖</span><span class="event-label">AI</span></span>
-        <span class="who">alice</span> on <span class="target">#29</span>
-      </div>
-      <div class="what">
-        <blockquote><em>Analyze regime:</em> Divergence signal на D1 совпадает с понижением объёмов — вероятность разворота 62%. Добавить фильтр тренда для снижения ложных входов.</blockquote>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="rerun" data-hyp="29" data-user="alice">
-    <div class="ts">12:14</div>
-    <div class="event-body">
-      <div>
-        <span class="act-rerun"><span class="event-icon">⟳</span><span class="event-label">rerun</span></span>
-        <span class="who">alice</span> on <span class="target">#29 Mom-divergence on SBER</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{rsi: 14, lookback: 21}</span> →
-        Sharpe <span class="num">1.42</span> · DSR <span class="num">0.89</span> · PBO <span class="num">0.31</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="approve" data-hyp="20" data-user="bob">
-    <div class="ts">10:00</div>
-    <div class="event-body">
-      <div>
-        <span class="act-approve"><span class="event-icon">✓</span><span class="event-label">approve</span></span>
-        <span class="who">bob</span> on <span class="target">#20 Z-score mean-reversion on SBER</span>
-      </div>
-      <div class="metrics what">
-        validating → approved (DSR 0.89, PBO 0.31)
-      </div>
-    </div>
-  </div>
-
-  <!-- 6 days ago · 2026-07-24 -->
-  <div class="day-divider">6 days ago · 2026-07-24</div>
-
-  <div class="event" data-type="edit" data-hyp="20" data-user="bob">
-    <div class="ts">16:55</div>
-    <div class="event-body">
-      <div>
-        <span class="act-edit"><span class="event-icon">✎</span><span class="event-label">edit</span></span>
-        <span class="who">bob</span> on <span class="target">#20</span>
-      </div>
-      <div class="metrics what">
-        Updated params <span class="diff">{z_entry: 1.5 → 2.0, z_exit: 0.0 → 0.5}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="create" data-hyp="20" data-user="bob">
-    <div class="ts">14:30</div>
-    <div class="event-body">
-      <div>
-        <span class="act-create"><span class="event-icon">+</span><span class="event-label">create</span></span>
-        <span class="who">bob</span> on <span class="target">#20 Z-score mean-reversion on SBER</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{family: mean-reversion, ticker: SBER, period: 30, z_entry: 1.5}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="rerun" data-hyp="18" data-user="bob">
-    <div class="ts">11:20</div>
-    <div class="event-body">
-      <div>
-        <span class="act-rerun"><span class="event-icon">⟳</span><span class="event-label">rerun</span></span>
-        <span class="who">bob</span> on <span class="target">#18 Elder impulse on VTBR</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{ema: 13, impulse_window: 5}</span> →
-        Sharpe <span class="num">0.72</span> · DSR <span class="num">0.45</span> · PBO <span class="num">0.51</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event system-event" data-type="status" data-hyp="15" data-user="system">
-    <div class="ts">09:05</div>
-    <div class="event-body">
-      <div>
-        <span class="act-status"><span class="event-icon">⤴</span><span class="event-label">status</span></span>
-        <span class="who actor-system">system</span> on <span class="target">#15 VWAP reversion on SBER</span>
-      </div>
-      <div class="metrics what">
-        idea <span class="diff">→</span> screening (auto: Sharpe 0.93 &gt; 0)
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="create" data-hyp="15" data-user="alice">
-    <div class="ts">08:15</div>
-    <div class="event-body">
-      <div>
-        <span class="act-create"><span class="event-icon">+</span><span class="event-label">create</span></span>
-        <span class="who">alice</span> on <span class="target">#15 VWAP reversion on SBER</span>
-      </div>
-      <div class="metrics what">
-        <span class="diff">{family: mean-reversion, ticker: SBER, period: 20, vwap_sigma: 2.0}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="event" data-type="ai" data-hyp="15" data-user="bob">
-    <div class="ts">07:30</div>
-    <div class="event-body">
-      <div>
-        <span class="act-ai"><span class="event-icon">🤖</span><span class="event-label">AI</span></span>
-        <span class="who">bob</span> on <span class="target">#15</span>
-      </div>
-      <div class="what">
-        <blockquote><em>Risk assessment:</em> VWAP reversion shows positive expectancy, but max drawdown 18% exceeds risk budget. Consider tightening stop-loss or reducing position size.</blockquote>
-      </div>
-    </div>
-  </div>
-
+  <div id="timeline-container"></div>
 </div>
 
-<div class="footer-note" id="footer-note">
-  Showing 24 events across 7 days · 12 hypotheses · 3 users
-</div>
+<div class="footer-note" id="footer-note">Loading…</div>
 
 <script>
 (function() {
-  // Filter pills
-  var pills = document.querySelectorAll('.filter-pill[data-type]');
-  var events = document.querySelectorAll('.event');
-  var footer = document.getElementById('footer-note');
+  var TYPE_CFG = {
+    create:  { cls: 'act-create',  icon: '+',  label: 'created' },
+    created: { cls: 'act-create',  icon: '+',  label: 'created' },
+    edit:    { cls: 'act-edit',    icon: '\u270E', label: 'edited' },
+    rerun:   { cls: 'act-rerun',   icon: '\u27F3', label: 'rerun' },
+    approve: { cls: 'act-approve', icon: '\u2713', label: 'approved' },
+    reject:  { cls: 'act-reject',  icon: '\u2717', label: 'rejected' },
+    comment: { cls: 'act-comment', icon: '\uD83D\uDCAC', label: 'comment' },
+    ai:      { cls: 'act-ai',      icon: '\uD83E\uDD16', label: 'AI' },
+    status:  { cls: 'act-status',  icon: '\u2934', label: 'status' },
+  };
 
-  function updateCounts() {
+  var TYPE_FILTER_MAP = {
+    create: 'create',
+    created: 'create',
+    edit: 'edit',
+    rerun: 'rerun',
+    approve: 'approve',
+    reject: 'reject',
+    comment: 'comment',
+    ai: 'ai',
+    status: 'status',
+    'status-change': 'status',
+  };
+
+  var container = document.getElementById('timeline-container');
+  var footer = document.getElementById('footer-note');
+  var statEvents = document.getElementById('stat-events');
+  var statHyps = document.getElementById('stat-hyps');
+  var statUsers = document.getElementById('stat-users');
+
+  var eventsData = [];
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function fmtDate(d) {
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function fmtTime(d) {
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function dateLabel(dateStr) {
+    var d = new Date(dateStr);
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var diff = Math.round((today - t) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    return diff + ' days ago';
+  }
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s || ''));
+    return d.innerHTML;
+  }
+
+  function getActiveFilterTypes() {
+    var m = {};
+    document.querySelectorAll('.filter-pill[data-type].active').forEach(function(p) {
+      var t = p.getAttribute('data-type');
+      if (t !== 'all') m[t] = true;
+    });
+    return m;
+  }
+
+  function applyFilters() {
+    var activeTypes = getActiveFilterTypes();
+    var hasActive = Object.keys(activeTypes).length > 0;
+    document.querySelectorAll('.event').forEach(function(el) {
+      if (!hasActive) {
+        el.style.display = '';
+      } else {
+        el.style.display = activeTypes[el.getAttribute('data-type')] ? '' : 'none';
+      }
+    });
+    updateFooterCounts();
+  }
+
+  function updateFooterCounts() {
     var visible = 0;
     var hyps = {};
     var users = {};
-    events.forEach(function(ev) {
+    document.querySelectorAll('.event').forEach(function(ev) {
       if (ev.style.display !== 'none') {
         visible++;
         var h = ev.getAttribute('data-hyp');
@@ -489,44 +274,113 @@ blockquote {
         if (u) users[u] = true;
       }
     });
-    footer.textContent = 'Showing ' + visible + ' events across 7 days · ' +
-      Object.keys(hyps).length + ' hypotheses · ' +
+    footer.textContent = 'Showing ' + visible + ' events across 7 days \u00B7 ' +
+      Object.keys(hyps).length + ' hypotheses \u00B7 ' +
       Object.keys(users).length + ' users';
-    document.getElementById('stat-events').textContent = visible;
-    document.getElementById('stat-hyps').textContent = Object.keys(hyps).length;
-    document.getElementById('stat-users').textContent = Object.keys(users).length;
+    statEvents.textContent = visible;
+    statHyps.textContent = Object.keys(hyps).length;
+    statUsers.textContent = Object.keys(users).length;
   }
 
-  pills.forEach(function(pill) {
+  function renderAll() {
+    container.innerHTML = '';
+
+    if (!eventsData || eventsData.length === 0) {
+      container.innerHTML = '<div style="padding:40px 0;text-align:center;color:var(--muted);font-size:14px;">No activity in the last 7 days</div>';
+      updateFooterCounts();
+      return;
+    }
+
+    var groups = {};
+    eventsData.forEach(function(ev) {
+      var d = new Date(ev.ts);
+      var key = fmtDate(d);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(ev);
+    });
+
+    var sortedDates = Object.keys(groups).sort().reverse();
+
+    sortedDates.forEach(function(dateKey) {
+      var events = groups[dateKey];
+      events.sort(function(a, b) { return new Date(b.ts) - new Date(a.ts); });
+
+      var div = document.createElement('div');
+      div.className = 'day-divider';
+      div.textContent = dateLabel(dateKey) + ' \u00B7 ' + dateKey;
+      container.appendChild(div);
+
+      events.forEach(function(ev) {
+        var dt = new Date(ev.ts);
+        var type = ev.type || 'create';
+        var cfg = TYPE_CFG[type] || TYPE_CFG.create;
+        var filterType = TYPE_FILTER_MAP[type] || 'create';
+
+        var el = document.createElement('div');
+        el.className = 'event' + (ev.actor === 'system' ? ' system-event' : '');
+        el.setAttribute('data-type', filterType);
+        el.setAttribute('data-hyp', ev.hypothesis || '');
+        el.setAttribute('data-user', ev.actor || '');
+
+        var targetHtml = ev.target ? ' on <span class="target">' + esc(ev.target) + '</span>' : '';
+        var sysCls = ev.actor === 'system' ? ' actor-system' : '';
+
+        el.innerHTML =
+          '<div class="ts">' + fmtTime(dt) + '</div>' +
+          '<div class="event-body">' +
+            '<div>' +
+              '<span class="' + cfg.cls + '"><span class="event-icon">' + cfg.icon + '</span><span class="event-label">' + cfg.label + '</span></span> ' +
+              '<span class="who' + sysCls + '">' + esc(ev.actor || '') + '</span>' + targetHtml +
+            '</div>' +
+            '<div class="what">' + esc(ev.description || '') + '</div>' +
+          '</div>';
+
+        container.appendChild(el);
+      });
+    });
+
+    applyFilters();
+  }
+
+  document.querySelectorAll('.filter-pill[data-type]').forEach(function(pill) {
     pill.addEventListener('click', function() {
       var type = this.getAttribute('data-type');
-      var isActive = this.classList.contains('active');
       if (type === 'all') {
-        pills.forEach(function(p) { p.classList.remove('active'); });
-        document.querySelector('.filter-pill[data-type="all"]').classList.add('active');
-        events.forEach(function(ev) { ev.style.display = ''; });
+        document.querySelectorAll('.filter-pill[data-type]').forEach(function(p) {
+          p.classList.toggle('active', p.getAttribute('data-type') === 'all');
+        });
       } else {
         document.querySelector('.filter-pill[data-type="all"]').classList.remove('active');
         this.classList.toggle('active');
-        var activeTypes = {};
-        document.querySelectorAll('.filter-pill[data-type].active').forEach(function(p) {
-          activeTypes[p.getAttribute('data-type')] = true;
-        });
+        var activeTypes = getActiveFilterTypes();
         if (Object.keys(activeTypes).length === 0) {
           document.querySelector('.filter-pill[data-type="all"]').classList.add('active');
-          events.forEach(function(ev) { ev.style.display = ''; });
-        } else {
-          events.forEach(function(ev) {
-            var et = ev.getAttribute('data-type');
-            ev.style.display = activeTypes[et] ? '' : 'none';
-          });
         }
       }
-      updateCounts();
+      applyFilters();
     });
   });
 
-  updateCounts();
+  fetch('/api/explore/stats')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d && typeof d.events === 'number') statEvents.textContent = d.events;
+      if (d && typeof d.hypotheses === 'number') statHyps.textContent = d.hypotheses;
+      if (d && typeof d.users === 'number') statUsers.textContent = d.users;
+    })
+    .catch(function() {});
+
+  fetch('/api/explore/activity')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d && Array.isArray(d)) eventsData = d;
+      else if (d && Array.isArray(d.events)) eventsData = d.events;
+      renderAll();
+    })
+    .catch(function(err) {
+      container.innerHTML = '<div style="padding:40px 0;text-align:center;color:var(--muted);font-size:14px;">Failed to load activity data.</div>';
+      footer.textContent = 'Failed to load';
+    });
 })();
 </script>
 

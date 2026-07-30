@@ -294,6 +294,154 @@ class RegistryStore:
             await self._db.delete(existing)
             await self._db.flush()
 
+    # ── Explore API ────────────────────────────────────────────
+
+    async def list_all_hypotheses(
+        self, limit: int = 100, offset: int = 0,
+    ) -> list[dict]:
+        """Все гипотезы с метриками для explore-таблицы."""
+        stmt = (
+            select(Hypothesis, Run)
+            .join(Run, Hypothesis.run_id == Run.id)
+            .order_by(Hypothesis.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        rows = await self._db.execute(stmt)
+        result = []
+        for hyp, run in rows.all():
+            result.append({
+                "id": str(hyp.id)[:8],
+                "name": _hyp_name(hyp),
+                "ticker": hyp.ticker,
+                "family": hyp.family,
+                "sharpe": hyp.sharpe,
+                "dsr": hyp.dsr,
+                "pbo": hyp.pbo,
+                "verdict": _hyp_verdict(hyp),
+                "owner": run.session_id,
+                "updated": _ago(hyp.created_at),
+                "run_id": str(run.id),
+                "is_valid": hyp.is_valid,
+            })
+        return result
+
+    async def get_hypothesis_detail(self, hyp_uuid: uuid.UUID) -> dict | None:
+        """Детали гипотезы + run = для notebook."""
+        stmt = select(Hypothesis, Run).join(Run).where(Hypothesis.id == hyp_uuid)
+        row = (await self._db.execute(stmt)).one_or_none()
+        if row is None:
+            return None
+        hyp, run = row
+        return {
+            "id": str(hyp.id)[:8],
+            "name": _hyp_name(hyp),
+            "ticker": hyp.ticker,
+            "family": hyp.family,
+            "params": hyp.config_json,
+            "sharpe": hyp.sharpe,
+            "dsr": hyp.dsr,
+            "pbo": hyp.pbo,
+            "cpcv": hyp.cpcv,
+            "max_drawdown": hyp.max_drawdown,
+            "is_valid": hyp.is_valid,
+            "verdict": _hyp_verdict(hyp),
+            "goal": run.goal,
+            "owner": run.session_id,
+            "created_at": hyp.created_at.isoformat(),
+            "updated_at": run.created_at.isoformat(),
+        }
+
+    async def get_explore_stats(self) -> dict:
+        """Агрегатные метрики для статистики на explore."""
+        from sqlalchemy import func
+        hyp_count = (await self._db.execute(
+            select(func.count(Hypothesis.id))
+        )).scalar() or 0
+        n_valid = (await self._db.execute(
+            select(func.count(Hypothesis.id)).where(Hypothesis.is_valid.is_(True))
+        )).scalar() or 0
+        run_count = (await self._db.execute(
+            select(func.count(Run.id))
+        )).scalar() or 0
+        return {
+            "total_hypotheses": hyp_count,
+            "total_runs": run_count,
+            "approved": n_valid,
+            "win_rate": round(n_valid / hyp_count * 100, 1) if hyp_count else 0,
+        }
+
+    async def get_recent_activity(self, days: int = 7) -> list[dict]:
+        """События за N дней — создание гипотез и прогонов."""
+        from datetime import timedelta
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        events: list[dict] = []
+
+        # Новые гипотезы
+        stmt_hyp = (
+            select(Hypothesis, Run)
+            .join(Run)
+            .where(Hypothesis.created_at >= cutoff)
+            .order_by(Hypothesis.created_at.desc())
+            .limit(50)
+        )
+        for hyp, run in (await self._db.execute(stmt_hyp)).all():
+            events.append({
+                "type": "create",
+                "id": str(hyp.id)[:8],
+                "name": _hyp_name(hyp),
+                "actor": run.session_id,
+                "ts": hyp.created_at.isoformat(),
+                "ticker": hyp.ticker,
+                "label": "hypothesis created",
+            })
+
+        # Новые прогоны
+        stmt_run = (
+            select(Run)
+            .where(Run.created_at >= cutoff)
+            .order_by(Run.created_at.desc())
+            .limit(20)
+        )
+        for run in (await self._db.execute(stmt_run)).scalars().all():
+            events.append({
+                "type": "rerun" if run.status == "done" else "created",
+                "id": str(run.id)[:8],
+                "name": run.goal[:60],
+                "actor": run.session_id,
+                "ts": run.created_at.isoformat(),
+                "label": f"pipeline {run.status}",
+            })
+
+        events.sort(key=lambda e: e["ts"], reverse=True)
+        return events[:50]
+
+
+def _hyp_name(hyp: Hypothesis) -> str:
+    return hyp.config_json.get("name", f"{hyp.family}/{hyp.ticker}")
+
+
+def _hyp_verdict(hyp: Hypothesis) -> str:
+    if hyp.is_valid:
+        return "approved"
+    if hyp.sharpe is None:
+        return "idea"
+    if hyp.sharpe > 1.0:
+        return "screening"
+    return "rejected"
+
+
+def _ago(dt: datetime) -> str:
+    """Human-friendly relative time."""
+    from datetime import timedelta
+    delta = datetime.now(UTC) - dt
+    if delta < timedelta(hours=1):
+        m = int(delta.total_seconds() / 60)
+        return f"{m}m ago" if m else "just now"
+    if delta < timedelta(days=1):
+        return f"{int(delta.total_seconds() / 3600)}h ago"
+    return f"{delta.days}d ago"
+
 
 @dataclass(frozen=True)
 class DecryptedSettings:

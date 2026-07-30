@@ -248,6 +248,11 @@ tbody tr.locked { opacity: 0.55; }
 .ticker-row .ticker-name-col { color: var(--accent); font-weight: 500; }
 .ticker-row .owner { color: var(--muted); font-size: 12px; }
 
+.db-error {
+  background: var(--red-bg); color: var(--red);
+  padding: 6px 14px; border-radius: 6px; font-size: 12px;
+  display: inline-block;
+}
 </style>
 
 </head>
@@ -263,23 +268,23 @@ tbody tr.locked { opacity: 0.55; }
   </div>
 </div>
 
-<div class="stats">
-  <span>Explored <strong id="stat-count">47</strong> hypotheses</span>
-  <span>Win rate <strong>26%</strong> (12 approved / 47 total)</span>
-  <span>Last activity <strong>2h ago</strong> · bob viewed #42</span>
-  <span class="chip"><strong>5</strong> with new runs today</span>
+<div class="stats" id="stats-bar">
+  <span>Explored <strong id="stat-count">—</strong> hypotheses</span>
+  <span>Win rate <strong id="stat-winrate">—</strong> (<span id="stat-approved">—</span> approved / <span id="stat-total">—</span> total)</span>
+  <span id="stat-last-activity"></span>
+  <span class="chip" id="stat-runs-today"></span>
 </div>
 
 <!-- Spreadsheet View -->
 <div class="view active" id="view-spreadsheet">
   <div class="filterbar">
     <span class="filterbar-label">Status:</span>
-    <span class="filter-pill active" data-filter="all">All (47)</span>
-    <span class="filter-pill" data-filter="screening">Screening (8)</span>
-    <span class="filter-pill" data-filter="validating">Validating (2)</span>
-    <span class="filter-pill" data-filter="approved">Approved (12)</span>
-    <span class="filter-pill" data-filter="rejected">Rejected (15)</span>
-    <span class="filter-pill" data-filter="archived">Archived (10)</span>
+    <span class="filter-pill active" data-filter="all">All (<span id="count-all">0</span>)</span>
+    <span class="filter-pill" data-filter="screening">Screening (<span id="count-screening">0</span>)</span>
+    <span class="filter-pill" data-filter="validating">Validating (<span id="count-validating">0</span>)</span>
+    <span class="filter-pill" data-filter="approved">Approved (<span id="count-approved">0</span>)</span>
+    <span class="filter-pill" data-filter="rejected">Rejected (<span id="count-rejected">0</span>)</span>
+    <span class="filter-pill" data-filter="archived">Archived (<span id="count-archived">0</span>)</span>
     <span class="filter-right">
       <span class="filter-pill">Sort: DSR ▾</span>
       <span class="filter-pill">Ticker ▾</span>
@@ -287,7 +292,7 @@ tbody tr.locked { opacity: 0.55; }
   </div>
 
   <div class="toolbar-row">
-    <button class="btn btn-primary">Run screening <span id="sel-count">(3 selected)</span></button>
+    <button class="btn btn-primary">Run screening <span id="sel-count">(0 selected)</span></button>
     <button class="btn">Suggest variants</button>
     <button class="btn">Archive</button>
     <div class="presence">
@@ -348,302 +353,34 @@ tbody tr.locked { opacity: 0.55; }
           <th>updated</th>
         </tr>
       </thead>
-      <tbody id="table-body">
-        <tr data-id="42" data-status="approved">
-          <td><input type="checkbox" class="row-check" checked onclick="event.stopPropagation()"></td>
-          <td class="id">#42</td>
-          <td><span class="tag tag-approved">approved</span></td>
-          <td class="name">SMA5/50 momentum</td>
-          <td>SBER</td>
-          <td class="sh-num">1.85</td>
-          <td class="sh-num up">0.96</td>
-          <td class="sh-num">0.28</td>
-          <td>4/4</td>
-          <td class="owner">alice</td>
-          <td class="owner">4h ago</td>
-        </tr>
-        <tr data-id="38" data-status="screening">
-          <td><input type="checkbox" class="row-check" checked onclick="event.stopPropagation()"></td>
-          <td class="id">#38</td>
-          <td><span class="tag tag-screening">screening</span></td>
-          <td class="name">RSI(14)+ATR</td>
-          <td>GAZP</td>
-          <td class="sh-num">1.10</td>
-          <td class="sh-num">0.71</td>
-          <td class="sh-num">0.45</td>
-          <td>2/4</td>
-          <td class="owner">bob</td>
-          <td class="owner">2h ago</td>
-        </tr>
-        <tr data-id="35" data-status="rejected">
-          <td><input type="checkbox" class="row-check" checked onclick="event.stopPropagation()"></td>
-          <td class="id">#35</td>
-          <td><span class="tag tag-rejected">rejected</span></td>
-          <td class="name">BBands breakout</td>
-          <td>LKOH</td>
-          <td class="sh-num down">-0.30</td>
-          <td class="sh-num down">0.12</td>
-          <td class="sh-num down">0.62</td>
-          <td>—</td>
-          <td class="owner">alice</td>
-          <td class="owner">3d ago</td>
-        </tr>
-        <tr data-id="29" data-status="validating">
-          <td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>
-          <td class="id">#29</td>
-          <td><span class="tag tag-validating">validating</span></td>
-          <td class="name">Mom-divergence</td>
-          <td>SBER</td>
-          <td class="sh-num">?</td>
-          <td class="sh-num">—</td>
-          <td class="sh-num">—</td>
-          <td>1/4 ◐</td>
-          <td class="owner">alice</td>
-          <td class="owner">1d ago</td>
-        </tr>
-        <tr data-id="51" data-status="idea" class="locked">
-          <td><input type="checkbox" class="row-check" disabled onclick="event.stopPropagation()"></td>
-          <td class="id">#51</td>
-          <td><span class="tag tag-idea">idea</span></td>
-          <td class="name">Donchian 20/55</td>
-          <td>GAZP</td>
-          <td class="sh-num">—</td>
-          <td class="sh-num">—</td>
-          <td class="sh-num">—</td>
-          <td>—</td>
-          <td class="owner">alice</td>
-          <td class="owner">just now</td>
-        </tr>
-        <tr data-id="20" data-status="approved">
-          <td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>
-          <td class="id">#20</td>
-          <td><span class="tag tag-approved">approved</span></td>
-          <td class="name">Z-score mean-reversion</td>
-          <td>SBER</td>
-          <td class="sh-num">1.42</td>
-          <td class="sh-num up">0.89</td>
-          <td class="sh-num">0.31</td>
-          <td>4/4</td>
-          <td class="owner">alice</td>
-          <td class="owner">5d ago</td>
-        </tr>
-        <tr data-id="18" data-status="archived">
-          <td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>
-          <td class="id">#18</td>
-          <td><span class="tag tag-archived">archived</span></td>
-          <td class="name">Elder impulse</td>
-          <td>VTBR</td>
-          <td class="sh-num">0.72</td>
-          <td class="sh-num">0.45</td>
-          <td class="sh-num">0.51</td>
-          <td>3/4</td>
-          <td class="owner">bob</td>
-          <td class="owner">1w ago</td>
-        </tr>
-        <tr data-id="15" data-status="screening">
-          <td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>
-          <td class="id">#15</td>
-          <td><span class="tag tag-screening">screening</span></td>
-          <td class="name">VWAP reversion</td>
-          <td>SBER</td>
-          <td class="sh-num">0.93</td>
-          <td class="sh-num">0.62</td>
-          <td class="sh-num">0.39</td>
-          <td>2/4</td>
-          <td class="owner">alice</td>
-          <td class="owner">6d ago</td>
-        </tr>
-      </tbody>
+      <tbody id="table-body"></tbody>
     </table>
   </div>
 
-  <div class="footer-note">
-    Compare overlay: rows #42, #38, #35 highlighted for side-by-side review.
-    Locked row (#51): alice editing — read-only for others.
-  </div>
+  <div class="footer-note" id="footer-note"></div>
 </div>
 
 <!-- Activity View -->
 <div class="view" id="view-activity">
-  <div class="activity-view">
-    <div class="activity-item">
-      <div class="activity-icon create">+</div>
-      <div class="activity-body">
-        <div class="desc"><a href="/explore/42">#42</a> · SMA5/50 momentum — approved by alice</div>
-        <div class="time">2 hours ago</div>
-      </div>
-    </div>
-    <div class="activity-item">
-      <div class="activity-icon update">~</div>
-      <div class="activity-body">
-        <div class="desc"><a href="/explore/38">#38</a> · RSI(14)+ATR — screening run completed, Sharpe 1.10</div>
-        <div class="time">2 hours ago</div>
-      </div>
-    </div>
-    <div class="activity-item">
-      <div class="activity-icon create">+</div>
-      <div class="activity-body">
-        <div class="desc"><a href="/explore/51">#51</a> · Donchian 20/55 — created by alice (edit in progress)</div>
-        <div class="time">3 hours ago</div>
-      </div>
-    </div>
-    <div class="activity-item">
-      <div class="activity-icon reject">✕</div>
-      <div class="activity-body">
-        <div class="desc"><a href="/explore/35">#35</a> · BBands breakout — rejected by bob</div>
-        <div class="time">3 days ago</div>
-      </div>
-    </div>
-    <div class="activity-item">
-      <div class="activity-icon update">~</div>
-      <div class="activity-body">
-        <div class="desc"><a href="/explore/20">#20</a> · Z-score mean-reversion — validating metrics updated</div>
-        <div class="time">5 days ago</div>
-      </div>
-    </div>
-    <div class="activity-item">
-      <div class="activity-icon update">~</div>
-      <div class="activity-body">
-        <div class="desc"><a href="/explore/15">#15</a> · VWAP reversion — added to screening queue</div>
-        <div class="time">6 days ago</div>
-      </div>
-    </div>
-    <div class="activity-item">
-      <div class="activity-icon create">+</div>
-      <div class="activity-body">
-        <div class="desc"><a href="/explore/18">#18</a> · Elder impulse — hypothesis registered</div>
-        <div class="time">1 week ago</div>
-      </div>
-    </div>
-  </div>
+  <div class="activity-view" id="activity-list"></div>
 </div>
 
 <!-- By Ticker View -->
 <div class="view" id="view-ticker">
-  <div class="filterbar">
+  <div class="filterbar" id="ticker-filterbar">
     <span class="filterbar-label">Ticker:</span>
     <span class="filter-pill active" data-filter="all">All</span>
-    <span class="filter-pill" data-filter="SBER">SBER</span>
-    <span class="filter-pill" data-filter="GAZP">GAZP</span>
-    <span class="filter-pill" data-filter="LKOH">LKOH</span>
   </div>
 
-  <div class="ticker-groups">
-    <div class="ticker-group">
-      <div class="ticker-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
-        <div class="ticker-name">SBER</div>
-        <div class="ticker-summary">
-          <span>15 hypotheses</span>
-          <span class="sep">·</span>
-          <span>avg Sharpe <strong>1.32</strong></span>
-          <span class="sep">·</span>
-          <span>best DSR <strong class="up">0.96</strong></span>
-        </div>
-        <div class="ticker-toggle">▾</div>
-      </div>
-      <div class="ticker-body">
-        <div class="ticker-rows">
-          <div class="ticker-row" onclick="location='/explore/42'">
-            <span class="id">#42</span>
-            <span class="ticker-name-col">SMA5/50 momentum</span>
-            <span class="tag tag-approved">approved</span>
-            <span class="sh-num up">0.96</span>
-            <span class="sh-num">1.85</span>
-            <span class="owner">alice</span>
-          </div>
-          <div class="ticker-row" onclick="location='/explore/29'">
-            <span class="id">#29</span>
-            <span class="ticker-name-col">Mom-divergence</span>
-            <span class="tag tag-validating">validating</span>
-            <span class="sh-num">—</span>
-            <span class="sh-num">?</span>
-            <span class="owner">alice</span>
-          </div>
-          <div class="ticker-row" onclick="location='/explore/20'">
-            <span class="id">#20</span>
-            <span class="ticker-name-col">Z-score mean-reversion</span>
-            <span class="tag tag-approved">approved</span>
-            <span class="sh-num up">0.89</span>
-            <span class="sh-num">1.42</span>
-            <span class="owner">alice</span>
-          </div>
-          <div class="ticker-row" onclick="location='/explore/51'">
-            <span class="id">#51</span>
-            <span class="ticker-name-col">Donchian 20/55</span>
-            <span class="tag tag-idea">idea</span>
-            <span class="sh-num">—</span>
-            <span class="sh-num">—</span>
-            <span class="owner">alice</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="ticker-group">
-      <div class="ticker-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
-        <div class="ticker-name">GAZP</div>
-        <div class="ticker-summary">
-          <span>10 hypotheses</span>
-          <span class="sep">·</span>
-          <span>avg Sharpe <strong>0.78</strong></span>
-          <span class="sep">·</span>
-          <span>best DSR <strong class="up">0.71</strong></span>
-        </div>
-        <div class="ticker-toggle">▾</div>
-      </div>
-      <div class="ticker-body">
-        <div class="ticker-rows">
-          <div class="ticker-row" onclick="location='/explore/38'">
-            <span class="id">#38</span>
-            <span class="ticker-name-col">RSI(14)+ATR</span>
-            <span class="tag tag-screening">screening</span>
-            <span class="sh-num">0.71</span>
-            <span class="sh-num">1.10</span>
-            <span class="owner">bob</span>
-          </div>
-          <div class="ticker-row" onclick="location='/explore/51'">
-            <span class="id">#51</span>
-            <span class="ticker-name-col">Donchian 20/55</span>
-            <span class="tag tag-idea">idea</span>
-            <span class="sh-num">—</span>
-            <span class="sh-num">—</span>
-            <span class="owner">alice</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="ticker-group">
-      <div class="ticker-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
-        <div class="ticker-name">LKOH</div>
-        <div class="ticker-summary">
-          <span>6 hypotheses</span>
-          <span class="sep">·</span>
-          <span>avg Sharpe <strong>0.41</strong></span>
-          <span class="sep">·</span>
-          <span>best DSR <strong class="down">0.12</strong></span>
-        </div>
-        <div class="ticker-toggle">▾</div>
-      </div>
-      <div class="ticker-body">
-        <div class="ticker-rows">
-          <div class="ticker-row" onclick="location='/explore/35'">
-            <span class="id">#35</span>
-            <span class="ticker-name-col">BBands breakout</span>
-            <span class="tag tag-rejected">rejected</span>
-            <span class="sh-num down">0.12</span>
-            <span class="sh-num down">-0.30</span>
-            <span class="owner">alice</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div class="ticker-groups" id="ticker-groups"></div>
 </div>
 
 <script>
 (function() {
-  // Tab switching
+  // ––– State –––
+  let allHypotheses = [];
+
+  // ––– Tab switching –––
   const tabs = document.querySelectorAll('#tabs .tab[data-view]');
   const views = {
     spreadsheet: document.getElementById('view-spreadsheet'),
@@ -677,16 +414,16 @@ tbody tr.locked { opacity: 0.55; }
     });
   });
 
-  // Row click → navigate to /explore/{id}
-  document.querySelectorAll('#table-body tr').forEach(row => {
-    row.addEventListener('click', function(e) {
-      if (e.target.closest('input[type="checkbox"]')) return;
-      const id = this.getAttribute('data-id');
-      if (id) window.location.href = '/explore/' + id;
-    });
+  // ––– Row click navigation (delegated) –––
+  document.getElementById('table-body').addEventListener('click', function(e) {
+    if (e.target.closest('input[type="checkbox"]')) return;
+    const row = e.target.closest('tr');
+    if (!row) return;
+    const id = row.getAttribute('data-id');
+    if (id) window.location.href = '/explore/' + id;
   });
 
-  // Select all checkbox
+  // ––– Select all checkbox –––
   const selectAll = document.getElementById('select-all');
   if (selectAll) {
     selectAll.addEventListener('change', function() {
@@ -696,9 +433,11 @@ tbody tr.locked { opacity: 0.55; }
     });
   }
 
-  // Individual checkboxes update selection count
-  document.querySelectorAll('#table-body .row-check').forEach(cb => {
-    cb.addEventListener('change', updateSelCount);
+  // ––– Individual checkboxes (delegated) –––
+  document.getElementById('table-body').addEventListener('change', function(e) {
+    if (e.target.classList.contains('row-check')) {
+      updateSelCount();
+    }
   });
 
   function updateSelCount() {
@@ -707,7 +446,7 @@ tbody tr.locked { opacity: 0.55; }
     if (el) el.textContent = '(' + sel + ' selected)';
   }
 
-  // Filter pills
+  // ––– Filter pills –––
   document.querySelectorAll('.filter-pill[data-filter]').forEach(pill => {
     pill.addEventListener('click', function() {
       const filter = this.getAttribute('data-filter');
@@ -727,7 +466,7 @@ tbody tr.locked { opacity: 0.55; }
     });
   });
 
-  // Multi-select for sorting pills
+  // ––– Multi-select for sorting pills –––
   document.querySelectorAll('.filter-pill').forEach(pill => {
     if (!pill.hasAttribute('data-filter')) {
       pill.addEventListener('click', function() {
@@ -735,6 +474,292 @@ tbody tr.locked { opacity: 0.55; }
       });
     }
   });
+
+  // ––– Utility –––
+  function timeAgo(iso) {
+    if (!iso) return '—';
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h ago';
+    const days = Math.floor(hours / 24);
+    return days + 'd ago';
+  }
+
+  function fmtNum(v) {
+    if (v == null || v === '?' || v === '—') return '—';
+    const n = Number(v);
+    return isNaN(n) ? '—' : n.toFixed(2);
+  }
+
+  function dsrClass(v) {
+    if (v == null) return '';
+    return Number(v) > 0.5 ? 'up' : '';
+  }
+
+  function pboClass(v) {
+    if (v == null) return '';
+    return Number(v) > 0.5 ? 'down' : '';
+  }
+
+  function sharpeClass(v) {
+    if (v == null) return '';
+    return Number(v) > 0 ? 'up' : (Number(v) < 0 ? 'down' : '');
+  }
+
+  function tagClass(verdict) {
+    const m = { approved: 'approved', screening: 'screening', rejected: 'rejected', validating: 'validating', archived: 'archived' };
+    return 'tag-' + (m[verdict] || 'idea');
+  }
+
+  // ––– Render: Stats –––
+  function renderStats(data) {
+    document.getElementById('stat-count').textContent = data.total_hypotheses ?? 0;
+    const wr = data.win_rate != null ? data.win_rate + '%' : '—';
+    document.getElementById('stat-winrate').textContent = wr;
+    document.getElementById('stat-approved').textContent = data.approved ?? 0;
+    document.getElementById('stat-total').textContent = data.total_hypotheses ?? 0;
+  }
+
+  // ––– Render: Table –––
+  function renderTable(rows) {
+    const tbody = document.getElementById('table-body');
+    const placeholder = document.getElementById('empty-table-placeholder');
+    const footer = document.getElementById('footer-note');
+
+    tbody.innerHTML = '';
+
+    if (!rows || rows.length === 0) {
+      if (placeholder) placeholder.style.display = 'block';
+      if (footer) footer.textContent = '';
+      updateSelCount();
+      return;
+    }
+
+    if (placeholder) placeholder.style.display = 'none';
+
+    rows.forEach(h => {
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-id', h.id);
+      tr.setAttribute('data-status', h.verdict || 'idea');
+
+      const sharpe = fmtNum(h.sharpe);
+      const dsr = fmtNum(h.dsr);
+      const pbo = fmtNum(h.pbo);
+
+      tr.innerHTML =
+        '<td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>' +
+        '<td class="id">#' + h.id + '</td>' +
+        '<td><span class="tag ' + tagClass(h.verdict) + '">' + (h.verdict || 'idea') + '</span></td>' +
+        '<td class="name">' + escHtml(h.name || '') + '</td>' +
+        '<td>' + escHtml(h.ticker || '') + '</td>' +
+        '<td class="sh-num ' + sharpeClass(h.sharpe) + '">' + sharpe + '</td>' +
+        '<td class="sh-num ' + dsrClass(h.dsr) + '">' + dsr + '</td>' +
+        '<td class="sh-num ' + pboClass(h.pbo) + '">' + pbo + '</td>' +
+        '<td>—</td>' +
+        '<td class="owner">' + escHtml(h.owner || '') + '</td>' +
+        '<td class="owner">' + (h.updated || '—') + '</td>';
+
+      tbody.appendChild(tr);
+    });
+
+    if (footer) {
+      const n = rows.length;
+      footer.textContent = n + ' hypothesis' + (n !== 1 ? 'es' : '') + ' loaded.';
+    }
+
+    updateSelCount();
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ––– Render: Filter pills –––
+  function updateFilterPills(rows) {
+    const counts = { all: rows.length };
+    rows.forEach(h => {
+      const v = h.verdict || 'idea';
+      counts[v] = (counts[v] || 0) + 1;
+    });
+    document.getElementById('count-all').textContent = counts.all;
+    document.getElementById('count-screening').textContent = counts.screening || 0;
+    document.getElementById('count-validating').textContent = counts.validating || 0;
+    document.getElementById('count-approved').textContent = counts.approved || 0;
+    document.getElementById('count-rejected').textContent = counts.rejected || 0;
+    document.getElementById('count-archived').textContent = counts.archived || 0;
+  }
+
+  // ––– Render: Activity –––
+  function renderActivity(events) {
+    const container = document.getElementById('activity-list');
+    container.innerHTML = '';
+
+    if (!events || events.length === 0) {
+      container.innerHTML = '<div class="empty-card" style="text-align:center;padding:40px"><h2>No recent activity</h2><p style="color:var(--muted)">Activity will appear here as hypotheses are created and processed.</p></div>';
+      return;
+    }
+
+    events.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'activity-item';
+
+      let iconChar, iconCls;
+      if (e.type === 'create') { iconChar = '+'; iconCls = 'create'; }
+      else if (e.type === 'reject') { iconChar = '\u2715'; iconCls = 'reject'; }
+      else { iconChar = '~'; iconCls = 'update'; }
+
+      const link = '<a href="/explore/' + e.id + '">#' + e.id + '</a>';
+      let desc;
+      if (e.type === 'create') {
+        desc = link + ' \u00B7 ' + escHtml(e.name) + ' \u2014 ' + escHtml(e.label) + ' by ' + escHtml(e.actor);
+      } else {
+        desc = link + ' \u00B7 ' + escHtml(e.name) + ' \u2014 ' + escHtml(e.label);
+      }
+
+      div.innerHTML =
+        '<div class="activity-icon ' + iconCls + '">' + iconChar + '</div>' +
+        '<div class="activity-body">' +
+          '<div class="desc">' + desc + '</div>' +
+          '<div class="time">' + timeAgo(e.ts) + '</div>' +
+        '</div>';
+
+      container.appendChild(div);
+    });
+  }
+
+  // ––– Render: Ticker groups –––
+  function renderTickerGroups(rows) {
+    const container = document.getElementById('ticker-groups');
+    const filterbar = document.getElementById('ticker-filterbar');
+    container.innerHTML = '';
+
+    const groups = {};
+    rows.forEach(h => {
+      const t = h.ticker || '?';
+      if (!groups[t]) groups[t] = [];
+      groups[t].push(h);
+    });
+
+    const tickers = Object.keys(groups).sort();
+
+    // Update ticker filterbar
+    if (filterbar) {
+      let html = '<span class="filterbar-label">Ticker:</span>';
+      html += '<span class="filter-pill active" data-filter="all">All</span>';
+      tickers.forEach(t => {
+        html += '<span class="filter-pill" data-filter="' + t + '">' + t + '</span>';
+      });
+      filterbar.innerHTML = html;
+
+      // Re-bind ticker filter clicks
+      filterbar.querySelectorAll('.filter-pill[data-filter]').forEach(pill => {
+        pill.addEventListener('click', function() {
+          const filter = this.getAttribute('data-filter');
+          filterbar.querySelectorAll('.filter-pill[data-filter]').forEach(p => {
+            p.classList.toggle('active', p === this);
+          });
+          document.querySelectorAll('.ticker-group').forEach(g => {
+            const t = g.getAttribute('data-ticker');
+            g.style.display = (filter === 'all' || t === filter) ? '' : 'none';
+          });
+        });
+      });
+    }
+
+    if (tickers.length === 0) {
+      container.innerHTML = '<div class="empty-card" style="text-align:center;padding:40px"><h2>No hypotheses yet</h2><p style="color:var(--muted)">Generate your first hypothesis to see it grouped by ticker.</p></div>';
+      return;
+    }
+
+    tickers.forEach(ticker => {
+      const hyps = groups[ticker];
+      const sharpeVals = hyps.map(h => h.sharpe).filter(s => s != null && !isNaN(Number(s))).map(Number);
+      const dsrVals = hyps.map(h => h.dsr).filter(d => d != null && !isNaN(Number(d))).map(Number);
+      const avgSharpe = sharpeVals.length ? (sharpeVals.reduce((a, b) => a + b, 0) / sharpeVals.length).toFixed(2) : '—';
+      const bestDSR = dsrVals.length ? Math.max(...dsrVals).toFixed(2) : '—';
+      const dsrCls = parseFloat(bestDSR) > 0.5 ? 'up' : '';
+
+      const group = document.createElement('div');
+      group.className = 'ticker-group';
+      group.setAttribute('data-ticker', ticker);
+
+      let rowsHtml = '';
+      hyps.forEach(h => {
+        const sharpe = fmtNum(h.sharpe);
+        const dsr = fmtNum(h.dsr);
+        rowsHtml +=
+          '<div class="ticker-row" onclick="window.location.href=\'/explore/' + h.id + '\'">' +
+          '<span class="id">#' + h.id + '</span>' +
+          '<span class="ticker-name-col">' + escHtml(h.name || '') + '</span>' +
+          '<span class="tag ' + tagClass(h.verdict) + '">' + (h.verdict || 'idea') + '</span>' +
+          '<span class="sh-num ' + dsrCls + '">' + dsr + '</span>' +
+          '<span class="sh-num">' + sharpe + '</span>' +
+          '<span class="owner">' + escHtml(h.owner || '') + '</span>' +
+          '</div>';
+      });
+
+      group.innerHTML =
+        '<div class="ticker-header" onclick="this.nextElementSibling.classList.toggle(\'collapsed\')">' +
+        '<div class="ticker-name">' + ticker + '</div>' +
+        '<div class="ticker-summary">' +
+        '<span>' + hyps.length + ' hypotheses</span>' +
+        '<span class="sep">\u00B7</span>' +
+        '<span>avg Sharpe <strong>' + avgSharpe + '</strong></span>' +
+        '<span class="sep">\u00B7</span>' +
+        '<span>best DSR <strong class="' + dsrCls + '">' + bestDSR + '</strong></span>' +
+        '</div>' +
+        '<div class="ticker-toggle">\u25BE</div>' +
+        '</div>' +
+        '<div class="ticker-body">' +
+        '<div class="ticker-rows">' + rowsHtml + '</div>' +
+        '</div>';
+
+      container.appendChild(group);
+    });
+  }
+
+  // ––– Fetch + init –––
+  async function init() {
+    try {
+      const [statsRes, hypRes] = await Promise.all([
+        fetch('/api/explore/stats'),
+        fetch('/api/explore/hypotheses'),
+      ]);
+
+      const stats = await statsRes.json();
+      renderStats(stats);
+
+      const hypData = await hypRes.json();
+      allHypotheses = hypData.hypotheses || [];
+      renderTable(allHypotheses);
+      updateFilterPills(allHypotheses);
+      renderTickerGroups(allHypotheses);
+    } catch (e) {
+      const bar = document.getElementById('stats-bar');
+      if (bar) {
+        const err = document.createElement('span');
+        err.className = 'db-error';
+        err.textContent = 'Database unavailable';
+        bar.appendChild(err);
+      }
+    }
+
+    try {
+      const actRes = await fetch('/api/explore/activity?days=7');
+      const actData = await actRes.json();
+      renderActivity(actData.events || []);
+    } catch (e) {
+      // activity stays empty
+    }
+  }
+
+  init();
 })();
 </script>
 
