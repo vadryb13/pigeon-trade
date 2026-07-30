@@ -81,7 +81,36 @@
 
 ---
 
+## Статус на 2026-07-30
+
+| Gap | Статус |
+|---|---|
+| P0. Full graphs page (`/explore/{id}/graphs`) | ✅ |
+| P0. Activity page (`/activity`) | ✅ |
+| P1. By ticker tab | ✅ |
+
+---
+
 ## Gap 6: Dynamic data from backend
+
+**Что нужно:**
+- API-эндпоинт `GET /api/explore/hypotheses` — список гипотез (id, ticker, family, metrics, status, owner)
+- API-эндпоинт `GET /api/explore/hypotheses/{id}` — детали гипотезы + историю событий
+- API-эндпоинт `GET /api/explore/stats` — количество, win rate, last activity
+- API-эндпоинт `GET /api/explore/activity` — лента событий за 7 дней
+- Frontend: замена статических sample-data на fetch + render
+
+**Требуется backend:**
+- `RegistryStore.list_hypotheses()` — выборка всех гипотез с метриками
+- `RegistryStore.get_hypothesis_with_events()` — гипотеза + лента событий
+- `RegistryStore.get_stats()` — агрегатные метрики
+- `RegistryStore.get_recent_events(days=7)` — лента событий
+- API-эндпоинты в `aqr/explore/api.py`
+- FastAPI router, подключение к main.py
+
+**Зависимости:** таблицы `hypotheses` и `hypothesis_events` уже есть в Alembic-миграциях
+
+**Оценка:** 3-5 дней (новые SQLAlchemy-запросы + тесты)
 
 **Что нужно:**
 - Заменить статические sample-data на реальные данные из реестра
@@ -96,11 +125,11 @@
 
 ## Приоритеты
 
-| Приоритет | Gap | Зависимости |
+| Приоритет | Gap | Статус |
 |---|---|---|
-| P0 | **Full graphs page** | Нет (чистый фронтенд) |
-| P0 | **Activity page** | Нет (чистый фронтенд) |
-| P1 | **By ticker tab** | После Activity (добавить таб во все страницы) |
-| P1 | **Dynamic data** | После P0 (нужна data-подложка) |
-| P2 | **Presence indicators** | Требует backend SSE |
-| P2 | **Pessimistic lock** | Требует backend SSE + Postgres |
+| P0 | **Full graphs page** | ✅ |
+| P0 | **Activity page** | ✅ |
+| P1 | **By ticker tab** | ✅ |
+| P1 | **Dynamic data** | ❌ — требуется RegistryStore API + endpoints |
+| P2 | **Presence indicators** | ❌ — требуется backend SSE |
+| P2 | **Pessimistic lock** | ❌ — требуется backend SSE + Postgres |
