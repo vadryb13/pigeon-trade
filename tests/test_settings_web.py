@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import pytest
 
+from conftest import FakeSession
+
 
 @pytest.fixture(autouse=True)
 def _stable_secret(monkeypatch):
@@ -14,31 +16,24 @@ def _stable_secret(monkeypatch):
 def mock_db(monkeypatch):
     """Мок async_session_factory с in-memory store для SessionSettings."""
 
-    class _FakeSession:
+    class _SettingsSession(FakeSession):
         def __init__(self):
+            super().__init__()
             self._store: dict[tuple[type, str], object] = {}
             self.commits = 0
 
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
         def add(self, obj):
+            super().add(obj)
             if hasattr(obj, "session_id"):
                 self._store[(type(obj), obj.session_id)] = obj
 
         async def get(self, model, key):
             return self._store.get((model, key))
 
-        async def flush(self):
-            return None
-
         async def commit(self):
             self.commits += 1
 
-    db = _FakeSession()
+    db = _SettingsSession()
 
     class _Factory:
         def __call__(self):

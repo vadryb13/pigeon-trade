@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import sys
-import types
-from unittest.mock import AsyncMock, MagicMock
+
+from conftest import FakeAdapter, FakeSession, fake_openai_module
 
 import numpy as np
 import pytest
@@ -26,41 +26,6 @@ def _clean_registry():
     yield
     reset_for_testing()
     register_all()
-
-
-@pytest.fixture
-def with_credentials():
-    """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.graph.context import reset_credentials, set_credentials
-    from aqr.registry import DecryptedSettings
-
-    creds = DecryptedSettings(
-        session_id="alice",
-        llm_model="claude-3-5-sonnet-20241022",
-        llm_api_key="sk-ant-fake",
-        openai_api_key="sk-oai-fake",
-        invest_token="t.INVEST_TOKEN_fake",
-        invest_sandbox=True,
-    )
-    token = set_credentials(creds)
-    yield creds
-    reset_credentials(token)
-
-
-@pytest.fixture
-def fake_litellm(monkeypatch):
-    """Мок litellm.acompletion с настраиваемым JSON-ответом."""
-    def _install(content: str):
-        fake_resp = MagicMock()
-        fake_resp.choices = [MagicMock()]
-        fake_resp.choices[0].message.content = content
-
-        fake_module = types.ModuleType("litellm")
-        fake_module.acompletion = AsyncMock(return_value=fake_resp)
-        monkeypatch.setitem(sys.modules, "litellm", fake_module)
-        return fake_module.acompletion
-
-    return _install
 
 
 @pytest.fixture
@@ -152,40 +117,10 @@ class TestPlanResearch:
         from aqr import session as db_mod
 
         # Мок DB: возвращает пустой результат search_similar (нет похожих)
-        class _EmptySession:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *a):
-                return None
-
-            async def execute(self, *a, **kw):
-                class _R:
-                    def all(self):
-                        return []
-                return _R()
-
-        class _EmptyFactory:
-            def __call__(self):
-                return _EmptySession()
-
-        monkeypatch.setattr(db_mod, "async_session_factory", _EmptyFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", lambda: FakeSession())
 
         # Мок openai (модуль может не быть установлен)
-        import types
-        from unittest.mock import MagicMock
-
-        class _FakeEmbeddingsAPI:
-            async def create(self, *, model, input):
-                return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
-
-        class _FakeAsyncOpenAI:
-            def __init__(self, **kw):
-                self.embeddings = _FakeEmbeddingsAPI()
-
-        fake_openai = types.ModuleType("openai")
-        fake_openai.AsyncOpenAI = _FakeAsyncOpenAI
-        monkeypatch.setitem(sys.modules, "openai", fake_openai)
+        monkeypatch.setitem(sys.modules, "openai", fake_openai_module())
 
         fake_litellm(
             '{"tickers": ["SBER"], "hypothesis_families": ["momentum"], '
@@ -223,22 +158,9 @@ class TestPlanResearch:
             def __call__(self):
                 return _EmptySession()
 
-        monkeypatch.setattr(db_mod, "async_session_factory", _EmptyFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", lambda: FakeSession())
 
-        import types
-        from unittest.mock import MagicMock
-
-        class _FakeEmbeddingsAPI:
-            async def create(self, *, model, input):
-                return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
-
-        class _FakeAsyncOpenAI:
-            def __init__(self, **kw):
-                self.embeddings = _FakeEmbeddingsAPI()
-
-        fake_openai = types.ModuleType("openai")
-        fake_openai.AsyncOpenAI = _FakeAsyncOpenAI
-        monkeypatch.setitem(sys.modules, "openai", fake_openai)
+        monkeypatch.setitem(sys.modules, "openai", fake_openai_module())
 
         fake_litellm(
             '{"tickers": ["SBER", "GAZP", "LKOH"], '
@@ -255,37 +177,9 @@ class TestPlanResearch:
     async def test_plan_returns_dict(self, monkeypatch, with_credentials, fake_litellm):
         from aqr import session as db_mod
 
-        class _EmptySession:
-            async def __aenter__(self):
-                return self
-            async def __aexit__(self, *a):
-                return None
-            async def execute(self, *a, **kw):
-                class _R:
-                    def all(self):
-                        return []
-                return _R()
+        monkeypatch.setattr(db_mod, "async_session_factory", lambda: FakeSession())
 
-        class _EmptyFactory:
-            def __call__(self):
-                return _EmptySession()
-
-        monkeypatch.setattr(db_mod, "async_session_factory", _EmptyFactory())
-
-        import types
-        from unittest.mock import MagicMock
-
-        class _FakeEmbeddingsAPI:
-            async def create(self, *, model, input):
-                return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
-
-        class _FakeAsyncOpenAI:
-            def __init__(self, **kw):
-                self.embeddings = _FakeEmbeddingsAPI()
-
-        fake_openai = types.ModuleType("openai")
-        fake_openai.AsyncOpenAI = _FakeAsyncOpenAI
-        monkeypatch.setitem(sys.modules, "openai", fake_openai)
+        monkeypatch.setitem(sys.modules, "openai", fake_openai_module())
 
         fake_litellm('{"tickers": ["GAZP"], "hypothesis_families": ["breakout"]}')
         monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
@@ -310,23 +204,9 @@ class TestLoadPrices:
         monkeypatch.setenv("AQR_CACHE_DIR", cache_path)
 
         # Мок TInvestAdapter
-        import pandas as pd
-
         from aqr.data import tinvest as tinvest_mod
 
-        class _FakeAdapter:
-            def __init__(self, *a, **kw):
-                pass
-
-            async def candles(self, ticker, from_date, to_date, interval="D1"):
-                rng = pd.date_range("2023-01-02", periods=500, freq="B")
-                px = [100 + i * 0.1 for i in range(500)]
-                return pd.DataFrame({
-                    "open": px, "high": px, "low": px,
-                    "close": px, "volume": [0] * 500,
-                }, index=rng)
-
-        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
+        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", FakeAdapter)
 
         tool = registry.get("load_prices")
         result = await tool.fn(tickers=["SBER", "GAZP"])
@@ -347,23 +227,9 @@ class TestLoadPrices:
         cache_path = f"/tmp/aqr_test_single_{uuid.uuid4().hex[:8]}.duckdb"
         monkeypatch.setenv("AQR_CACHE_DIR", cache_path)
 
-        import pandas as pd
-
         from aqr.data import tinvest as tinvest_mod
 
-        class _FakeAdapter:
-            def __init__(self, *a, **kw):
-                pass
-
-            async def candles(self, ticker, from_date, to_date, interval="D1"):
-                rng = pd.date_range("2023-01-02", periods=500, freq="B")
-                px = [100.0] * 500
-                return pd.DataFrame({
-                    "open": px, "high": px, "low": px,
-                    "close": px, "volume": [0] * 500,
-                }, index=rng)
-
-        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
+        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", FakeAdapter)
 
         tool = registry.get("load_prices")
         result = await tool.fn(tickers=["LKOH"])

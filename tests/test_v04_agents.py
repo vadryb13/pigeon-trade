@@ -6,14 +6,11 @@ Mock strategy:
 """
 from __future__ import annotations
 
-import sys
-import types
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
+
+from conftest import FakeAdapter, FakeSession, fake_openai_module
 
 import pytest
-
-from aqr.graph.context import reset_credentials, set_credentials
-from aqr.registry import DecryptedSettings
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -59,22 +56,6 @@ def _clear_registry(monkeypatch):
     """Reset the global tool registry before each test."""
     from aqr.tools import reset_for_testing
     reset_for_testing()
-
-
-@pytest.fixture
-def with_credentials():
-    """Set session credentials into ContextVar."""
-    creds = DecryptedSettings(
-        session_id="test-session",
-        llm_model="claude-3-5-sonnet-20241022",
-        llm_api_key="sk-ant-fake",
-        openai_api_key="sk-oai-fake",
-        invest_token="t.INVEST_TOKEN_fake",
-        invest_sandbox=True,
-    )
-    token = set_credentials(creds)
-    yield creds
-    reset_credentials(token)
 
 
 class _FakeToolRegistry(dict):
@@ -146,54 +127,15 @@ def fake_tool_registry():
 @pytest.fixture
 def mock_openai(monkeypatch):
     """Mock openai.AsyncOpenAI for Embedder."""
-    class _FakeEmbAPI:
-        async def create(self, *, model, input):
-            return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
-
-    class _FakeAIOpenAI:
-        def __init__(self, **kw):
-            self.embeddings = _FakeEmbAPI()
-
-    fake = types.ModuleType("openai")
-    fake.AsyncOpenAI = _FakeAIOpenAI
-    monkeypatch.setitem(sys.modules, "openai", fake)
+    import sys
+    monkeypatch.setitem(sys.modules, "openai", fake_openai_module())
 
 
 @pytest.fixture
 def mock_db(monkeypatch):
     """Mock async_session_factory for DB-dependent agents."""
     from aqr import session as db_mod
-
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return None
-
-        async def execute(self, *a, **kw):
-            class _R:
-                def scalars(self):
-                    return self
-                def all(self):
-                    return []
-                def scalar(self):
-                    return None
-            return _R()
-
-        async def get(self, *a, **kw):
-            return None
-
-        async def commit(self):
-            return None
-
-        async def flush(self):
-            return None
-
-        def add(self, *a, **kw):
-            return None
-
-    monkeypatch.setattr(db_mod, "async_session_factory", lambda: _FakeSession())
+    monkeypatch.setattr(db_mod, "async_session_factory", lambda: FakeSession())
 
 
 @pytest.fixture
@@ -201,14 +143,7 @@ def mock_tinvest(monkeypatch):
     """Mock TInvestAdapter for BrowserAgent."""
     from aqr.data import tinvest as tinvest_mod
 
-    class _FakeAdapter:
-        def __init__(self, *a, **kw):
-            pass
-
-        async def _resolve_figi(self, ticker):
-            return {"SBER": "BBG004730N88", "GAZP": "BBG004730RP0"}.get(ticker, "")
-
-    monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
+    monkeypatch.setattr(tinvest_mod, "TInvestAdapter", FakeAdapter)
 
 
 # ── EditorAgent tests ────────────────────────────────────────────

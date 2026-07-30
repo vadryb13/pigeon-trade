@@ -10,31 +10,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from conftest import CountingAdapter
+
 duckdb = pytest.importorskip("duckdb")
 
 
 @pytest.fixture(autouse=True)
 def _stable_secret(monkeypatch):
     monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
-
-
-@pytest.fixture
-def with_credentials():
-    """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.graph.context import reset_credentials, set_credentials
-    from aqr.registry import DecryptedSettings
-
-    creds = DecryptedSettings(
-        session_id="alice",
-        llm_model="claude-3-5-sonnet-20241022",
-        llm_api_key="sk-ant-fake",
-        openai_api_key="sk-oai-fake",
-        invest_token="t.INVEST_TOKEN_fake",
-        invest_sandbox=True,
-    )
-    token = set_credentials(creds)
-    yield creds
-    reset_credentials(token)
 
 
 # ── Fixtures ────────────────────────────────────────────────────
@@ -186,32 +169,12 @@ class TestLoadPricesIntegration:
         # Подменяем кэш на временную директорию
         db_path = tmp_path / "test_load_cache.duckdb"
 
-        # Подменяем TInvestAdapter так, чтобы первый вызов ходил в фиктивный
-        # T-Invest, второй — выкинул ошибку (если попадёт — тест провалится)
+        # Подменяем TInvestAdapter так, чтобы первый вызов шёл в T-Invest,
+        # второй — должен быть кэширован (иначе call_count будет 2)
         from aqr.data import tinvest as tinvest_mod
 
-        call_count = {"n": 0}
-
-        class _CountingAdapter:
-            def __init__(self, *a, **kw):
-                pass
-
-            async def candles(self, ticker, *a, **kw):
-                call_count["n"] += 1
-                if call_count["n"] > 1:
-                    raise RuntimeError("Second call should hit cache, not T-Invest")
-                rng = np.random.default_rng(hash(ticker) % (2**32))
-                n = 500
-                r = rng.normal(0.0005, 0.015, n)
-                idx = pd.date_range("2023-01-02", periods=n, freq="B")
-                px = 100 * np.exp(np.cumsum(r))
-                return pd.DataFrame({
-                    "open": px, "high": px * 1.001,
-                    "low": px * 0.999, "close": px,
-                    "volume": np.zeros(n, dtype=np.int64),
-                }, index=idx)
-
-        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _CountingAdapter)
+        adapter = CountingAdapter()
+        monkeypatch.setattr(tinvest_mod, "TInvestAdapter", lambda *a, **kw: adapter)
 
         # Подменяем путь к кэшу через monkeypatch
         original_init = cache_mod.OhlcvCache.__init__
@@ -226,12 +189,12 @@ class TestLoadPricesIntegration:
         # Первый вызов — идёт в T-Invest, заполняет кэш
         r1 = await load_prices(tickers=["SBER"], start_date="2023-01-02", end_date="2024-12-31")
         assert "SBER" in r1
-        assert call_count["n"] == 1
+        assert adapter.call_count == 1
 
         # Второй вызов — должен использовать кэш (T-Invest не вызывается)
         r2 = await load_prices(tickers=["SBER"], start_date="2023-01-02", end_date="2024-12-31")
         assert "SBER" in r2
-        assert call_count["n"] == 1  # всё ещё 1, второй запрос не пошёл в T-Invest
+        assert adapter.call_count == 1  # всё ещё 1, второй запрос не пошёл в T-Invest
 
         # Данные идентичны
         assert r1["SBER"] == r2["SBER"]

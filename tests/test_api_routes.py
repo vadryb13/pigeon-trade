@@ -5,9 +5,10 @@
 from __future__ import annotations
 
 import sys
-import types
 import uuid
 from unittest.mock import AsyncMock, MagicMock
+
+from conftest import FakeSession, fake_openai_module
 
 import pytest
 
@@ -18,74 +19,15 @@ def _stable_secret(monkeypatch):
 
 
 @pytest.fixture
-def with_credentials():
-    from aqr.graph.context import reset_credentials, set_credentials
-    from aqr.registry import DecryptedSettings
-
-    creds = DecryptedSettings(
-        session_id="alice",
-        llm_model="claude-3-5-sonnet-20241022",
-        llm_api_key="sk-ant-fake",
-        openai_api_key="sk-oai-fake",
-        invest_token="t.INVEST_TOKEN_fake",
-        invest_sandbox=True,
-    )
-    token = set_credentials(creds)
-    yield creds
-    reset_credentials(token)
-
-
-@pytest.fixture
 def fake_openai(monkeypatch):
-    """Мок openai.AsyncOpenAI — embeddings возвращает [0.1] * 1536."""
-
-    class _FakeEmbeddingsAPI:
-        async def create(self, *, model, input):
-            return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
-
-    class _FakeAsyncOpenAI:
-        def __init__(self, **kw):
-            self.embeddings = _FakeEmbeddingsAPI()
-
-    fake = types.ModuleType("openai")
-    fake.AsyncOpenAI = _FakeAsyncOpenAI
-    monkeypatch.setitem(sys.modules, "openai", fake)
+    """Мок openai.AsyncOpenAI — embeddings возвращает [0.1] * 768."""
+    monkeypatch.setitem(sys.modules, "openai", fake_openai_module())
 
 
 @pytest.fixture
 def mock_db(monkeypatch):
     """Мок БД и Executor."""
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def commit(self):
-            pass
-
-        async def rollback(self):
-            pass
-
-        async def flush(self):
-            pass
-
-        async def get(self, *args, **kw):
-            return None
-
-        async def execute(self, *args, **kw):
-            class _R:
-                scalars = lambda self: self
-                all = lambda self: []
-                def scalar(self):
-                    return None
-            return _R()
-
-        def add(self, *args, **kw):
-            pass
-
-    factory = type("_F", (), {"__call__": lambda self: _FakeSession()})()
+    factory = type("_F", (), {"__call__": lambda self: FakeSession()})()
 
     from aqr import session as db_mod
     monkeypatch.setattr(db_mod, "async_session_factory", factory)
@@ -204,7 +146,7 @@ class TestRunAndPersist:
         call_kwargs = mock_db.create_hypothesis.call_args.kwargs
         assert "embedding" in call_kwargs
         assert isinstance(call_kwargs["embedding"], list)
-        assert len(call_kwargs["embedding"]) == 1536
+        assert len(call_kwargs["embedding"]) == 768
 
     @pytest.mark.asyncio
     async def test_persist_handles_executor_failure(self, mock_db):

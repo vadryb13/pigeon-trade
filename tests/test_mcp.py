@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+from conftest import FakeSession
+
 import pytest
 
 
@@ -45,21 +47,7 @@ def mock_dependencies(monkeypatch):
 
     from aqr import session as db_mod
 
-    class _FakeSession:
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return None
-        async def execute(self, *a, **kw):
-            class R:
-                def scalars(self): return self
-                def all(self): return []
-                def scalar(self): return None
-            return R()
-        async def get(self, *a, **kw): return None
-        async def commit(self): return None
-        async def flush(self): return None
-        def add(self, *a, **kw): return None
-
-    db_mod.async_session_factory = lambda: _FakeSession()
+    db_mod.async_session_factory = lambda: FakeSession()
 
 
 class TestMCPDispatch:

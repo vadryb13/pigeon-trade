@@ -6,16 +6,19 @@ from __future__ import annotations
 
 import pytest
 
+from conftest import FakeSession
+
 
 @pytest.fixture(autouse=True)
 def _set_secret(monkeypatch):
     monkeypatch.setenv("AQR_SESSION_SECRET", "x" * 32)
 
 
-class _FakeDB:
+class _FakeDB(FakeSession):
     """Минимальный мок AsyncSession для тестов SessionSettings."""
 
     def __init__(self):
+        super().__init__()
         self.added: list = []
         self.deleted: list = []
         self._store: dict[tuple[type, str], object] = {}
@@ -24,6 +27,7 @@ class _FakeDB:
         return (model, getattr(obj, "id", None) or obj.session_id)
 
     def add(self, obj):
+        super().add(obj)
         self.added.append(obj)
         # SessionSettings → PK = session_id; Session → PK = id
         if hasattr(obj, "session_id") and not hasattr(obj, "id"):
@@ -37,9 +41,6 @@ class _FakeDB:
     async def delete(self, obj):
         self.deleted.append(obj)
         self._store.pop(self._pk(model=type(obj), obj=obj), None)
-
-    async def flush(self):
-        return None
 
 
 class TestSessionSettingsCRUD:

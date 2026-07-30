@@ -5,54 +5,10 @@ import json
 
 import pytest
 
-
-@pytest.fixture(autouse=True)
-def _stable_secret(monkeypatch):
-    """Зафиксировать AQR_SESSION_SECRET ≥32 chars для воспроизводимости токенов."""
-    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
+from conftest import FakeSession
 
 
 # ── Mocks для БД ────────────────────────────────────────────────
-
-class _FakeSession:
-    """Заглушка AsyncSession — поддерживает async context manager."""
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        return None
-
-    async def commit(self):
-        return None
-
-    async def flush(self):
-        return None
-
-    async def get(self, *args, **kw):
-        return None
-
-    async def execute(self, *args, **kw):
-        class _R:
-            def scalars(self):
-                return self
-            def all(self):
-                return []
-            def scalar(self):
-                return None
-        return _R()
-
-    def add(self, obj):
-        return None
-
-    async def delete(self, *args, **kw):
-        return None
-
-
-class _FakeFactory:
-    def __call__(self):
-        return _FakeSession()
-
 
 @pytest.fixture
 def mock_db(monkeypatch):
@@ -60,7 +16,7 @@ def mock_db(monkeypatch):
     from aqr import session as db_mod
     from aqr.chat import ws as ws_mod
 
-    factory = _FakeFactory()
+    factory = lambda: FakeSession()
     monkeypatch.setattr(db_mod, "async_session_factory", factory)
     monkeypatch.setattr(ws_mod, "async_session_factory", factory)
     return factory

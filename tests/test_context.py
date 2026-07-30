@@ -8,6 +8,8 @@ from __future__ import annotations
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
+from conftest import BrokenFactory, FakeSession
+
 import pytest
 
 
@@ -34,17 +36,7 @@ class _FakeRun:
 @pytest.fixture
 def mock_db(monkeypatch):
     """Мок БД на уровне agent/context.py и db. RegistryStore тоже мокается."""
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def commit(self):
-            pass
-
-    factory = type("_F", (), {"__call__": lambda self: _FakeSession()})()
+    factory = type("_F", (), {"__call__": lambda self: FakeSession()})()
 
     from aqr import session as db_mod
     monkeypatch.setattr(db_mod, "async_session_factory", factory)
@@ -154,11 +146,7 @@ class TestGetUntestedCombos:
         from aqr import session as db_mod
         from aqr.graph.context import SessionContext
 
-        class _BrokenFactory:
-            def __call__(self):
-                raise RuntimeError("DB down")
-
-        monkeypatch.setattr(db_mod, "async_session_factory", _BrokenFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", BrokenFactory())
 
         ctx = SessionContext("sess")
         suggestions = await ctx.get_untested_combos()

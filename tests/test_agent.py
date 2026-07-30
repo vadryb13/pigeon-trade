@@ -2,8 +2,14 @@
 from __future__ import annotations
 
 import sys
-import types
-from unittest.mock import AsyncMock, MagicMock
+
+from conftest import (
+    FakeAdapter,
+    FakeAsyncOpenAI,
+    FakeEmbeddingsAPI,
+    FakeSession,
+    fake_openai_module,
+)
 
 import pandas as pd
 import pytest
@@ -20,117 +26,25 @@ from aqr.graph.graph import (
 )
 
 
-@pytest.fixture(autouse=True)
-def _stable_secret(monkeypatch):
-    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
-
-
-@pytest.fixture
-def with_credentials():
-    """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.graph.context import reset_credentials, set_credentials
-    from aqr.registry import DecryptedSettings
-
-    creds = DecryptedSettings(
-        session_id="alice",
-        llm_model="claude-3-5-sonnet-20241022",
-        llm_api_key="sk-ant-fake",
-        openai_api_key="sk-oai-fake",
-        invest_token="t.INVEST_TOKEN_fake",
-        invest_sandbox=True,
-    )
-    token = set_credentials(creds)
-    yield creds
-    reset_credentials(token)
-
-
-@pytest.fixture
-def fake_litellm(monkeypatch):
-    """Мок litellm.acompletion — отвечает JSON в зависимости от system prompt."""
-    def _install(response_json: str):
-        fake_resp = MagicMock()
-        fake_resp.choices = [MagicMock()]
-        fake_resp.choices[0].message.content = response_json
-
-        fake_module = types.ModuleType("litellm")
-        fake_module.acompletion = AsyncMock(return_value=fake_resp)
-        monkeypatch.setitem(sys.modules, "litellm", fake_module)
-        return fake_module.acompletion
-
-    return _install
-
-
 @pytest.fixture
 def fake_tinvest(monkeypatch):
     """Мок TInvestAdapter.candles — возвращает синтетический DataFrame."""
     from aqr.data import tinvest as tinvest_mod
 
-    class _FakeAdapter:
-        def __init__(self, *a, **kw):
-            pass
-
-        def candles(self, ticker, *a, **kw):
-            rng = pd.date_range("2023-01-02", periods=500, freq="B")
-            px = [100 + i * 0.05 for i in range(500)]
-            return pd.DataFrame({
-                "open": px, "high": px, "low": px,
-                "close": px, "volume": [0] * 500,
-            }, index=rng)
-
-    monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _FakeAdapter)
+    monkeypatch.setattr(tinvest_mod, "TInvestAdapter", FakeAdapter)
 
 
 @pytest.fixture
 def fake_openai(monkeypatch):
-    """Мок openai.AsyncOpenAI — embeddings возвращает [0.1] * 1536."""
-    class _FakeEmbeddingsAPI:
-        async def create(self, *, model, input):
-            return MagicMock(data=[MagicMock(embedding=[0.1] * 1536)])
-
-    class _FakeAsyncOpenAI:
-        def __init__(self, **kw):
-            self.embeddings = _FakeEmbeddingsAPI()
-
-    fake = types.ModuleType("openai")
-    fake.AsyncOpenAI = _FakeAsyncOpenAI
-    monkeypatch.setitem(sys.modules, "openai", fake)
+    """Мок openai.AsyncOpenAI — embeddings возвращает [0.1] * 768."""
+    monkeypatch.setitem(sys.modules, "openai", fake_openai_module())
 
 
 @pytest.fixture
 def mock_db(monkeypatch):
     """Мок async_session_factory + DB."""
     from aqr import session as db_mod
-
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return None
-
-        async def execute(self, *a, **kw):
-            class _R:
-                def scalars(self):
-                    return self
-                def all(self):
-                    return []
-                def scalar(self):
-                    return None
-            return _R()
-
-        async def get(self, *a, **kw):
-            return None
-
-        async def commit(self):
-            return None
-
-        async def flush(self):
-            return None
-
-        def add(self, *a, **kw):
-            return None
-
-    factory = lambda: _FakeSession()
+    factory = lambda: FakeSession()
     monkeypatch.setattr(db_mod, "async_session_factory", factory)
     return factory
 

@@ -9,6 +9,8 @@ import uuid
 from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock
 
+from conftest import BrokenFactory, FakeSession
+
 import pytest
 
 
@@ -74,17 +76,7 @@ class _FakeRun:
 def mock_db_and_store(monkeypatch):
     """Мок async_session_factory и RegistryStore на уровне обоих модулей."""
 
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def commit(self):
-            pass
-
-    factory = type("_F", (), {"__call__": lambda self: _FakeSession()})()
+    factory = type("_F", (), {"__call__": lambda self: FakeSession()})()
 
     # Патчим db.async_session_factory
     from aqr import session as db_mod
@@ -243,12 +235,8 @@ class TestSearchSimilarHypotheses:
         from aqr.tools import storage
         from aqr.tools import storage as storage_mod
 
-        class _BrokenFactory:
-            def __call__(self):
-                raise RuntimeError("DB down")
-
-        monkeypatch.setattr(db_mod, "async_session_factory", _BrokenFactory())
-        monkeypatch.setattr(storage_mod, "async_session_factory", _BrokenFactory())
+        monkeypatch.setattr(db_mod, "async_session_factory", BrokenFactory())
+        monkeypatch.setattr(storage_mod, "async_session_factory", BrokenFactory())
 
         import pytest
         # Strict mode (Phase 6): search_similar_hypotheses now raises on DB failure

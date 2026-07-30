@@ -13,28 +13,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from conftest import CountingAdapter
+
 
 @pytest.fixture(autouse=True)
 def _stable_secret(monkeypatch):
     monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
-
-
-@pytest.fixture
-def with_credentials():
-    from aqr.graph.context import reset_credentials, set_credentials
-    from aqr.registry import DecryptedSettings
-
-    creds = DecryptedSettings(
-        session_id="alice",
-        llm_model="claude-3-5-sonnet-20241022",
-        llm_api_key="sk-ant-fake",
-        openai_api_key="sk-oai-fake",
-        invest_token="t.INVEST_TOKEN_fake",
-        invest_sandbox=True,
-    )
-    token = set_credentials(creds)
-    yield creds
-    reset_credentials(token)
 
 
 @pytest.fixture
@@ -43,25 +27,8 @@ def tinvest_counter(monkeypatch):
     from aqr.data import ohlcv_cache as cache_mod
     from aqr.data import tinvest as tinvest_mod
 
-    counter = {"n": 0}
-
-    class _CountingAdapter:
-        def __init__(self, *a, **kw):
-            pass
-
-        async def candles(self, ticker, *a, **kw):
-            counter["n"] += 1
-            rng = np.random.default_rng(hash(ticker) % (2**32))
-            n = 500
-            ret = rng.normal(0.0005, 0.015, n)
-            idx = pd.date_range("2023-01-02", periods=n, freq="B")
-            px = 100 * np.exp(np.cumsum(ret))
-            return pd.DataFrame({
-                "open": px, "high": px * 1.001, "low": px * 0.999,
-                "close": px, "volume": np.zeros(n, dtype=np.int64),
-            }, index=idx)
-
-    monkeypatch.setattr(tinvest_mod, "TInvestAdapter", _CountingAdapter)
+    adapter = CountingAdapter()
+    monkeypatch.setattr(tinvest_mod, "TInvestAdapter", lambda *a, **kw: adapter)
 
     # Подменяем путь к кэшу на временную директорию
     db_path = Path(os.getenv("AQR_CACHE_TEST_DIR", "/tmp/aqr_cache_test.duckdb"))
@@ -77,7 +44,7 @@ def tinvest_counter(monkeypatch):
     if db_path.exists():
         db_path.unlink()
 
-    yield counter
+    yield adapter
 
     if db_path.exists():
         db_path.unlink()
@@ -93,11 +60,11 @@ class TestCacheReuseAcrossRuns:
 
         r1 = await load_prices(["SBER"], "2023-01-02", "2024-12-31")
         assert "SBER" in r1
-        assert tinvest_counter["n"] == 1
+        assert tinvest_counter.call_count == 1
 
         r2 = await load_prices(["SBER"], "2023-01-02", "2024-12-31")
         assert r1["SBER"] == r2["SBER"]
-        assert tinvest_counter["n"] == 1, "T-Invest вызван повторно — кэш не сработал"
+        assert tinvest_counter.call_count == 1, "T-Invest вызван повторно — кэш не сработал"
 
     @pytest.mark.asyncio
     async def test_followup_question_reuses_cache(
@@ -107,12 +74,12 @@ class TestCacheReuseAcrossRuns:
         from aqr.tools.core import load_prices
 
         await load_prices(["SBER"], "2023-01-02", "2024-12-31")
-        first_call_count = tinvest_counter["n"]
+        first_call_count = tinvest_counter.call_count
         assert first_call_count == 1
 
         r = await load_prices(["SBER"], "2023-01-02", "2024-12-31")
         assert "SBER" in r
-        assert tinvest_counter["n"] == first_call_count
+        assert tinvest_counter.call_count == first_call_count
 
     @pytest.mark.asyncio
     async def test_new_ticker_still_hits_tinvest(
@@ -122,13 +89,13 @@ class TestCacheReuseAcrossRuns:
         from aqr.tools.core import load_prices
 
         await load_prices(["SBER"], "2023-01-02", "2024-12-31")
-        assert tinvest_counter["n"] == 1
+        assert tinvest_counter.call_count == 1
 
         await load_prices(["GAZP"], "2023-01-02", "2024-12-31")
-        assert tinvest_counter["n"] == 2
+        assert tinvest_counter.call_count == 2
 
         await load_prices(["SBER"], "2023-01-02", "2024-12-31")
-        assert tinvest_counter["n"] == 2
+        assert tinvest_counter.call_count == 2
 
     @pytest.mark.asyncio
     async def test_mixed_tickers_partial_cache(
@@ -138,11 +105,11 @@ class TestCacheReuseAcrossRuns:
         from aqr.tools.core import load_prices
 
         await load_prices(["SBER"], "2023-01-02", "2024-12-31")
-        assert tinvest_counter["n"] == 1
+        assert tinvest_counter.call_count == 1
 
         result = await load_prices(["SBER", "GAZP"], "2023-01-02", "2024-12-31")
         assert set(result.keys()) == {"SBER", "GAZP"}
-        assert tinvest_counter["n"] == 2
+        assert tinvest_counter.call_count == 2
 
     @pytest.mark.asyncio
     async def test_data_persists_across_cache_instances(
@@ -152,11 +119,11 @@ class TestCacheReuseAcrossRuns:
         from aqr.tools.core import load_prices
 
         await load_prices(["SBER"], "2023-01-02", "2024-12-31")
-        first_n = tinvest_counter["n"]
+        first_n = tinvest_counter.call_count
 
         from aqr.data import ohlcv_cache as cache_mod
         cache_mod.OhlcvCache()  # инициализация из того же пути
 
         r = await load_prices(["SBER"], "2023-01-02", "2024-12-31")
-        assert tinvest_counter["n"] == first_n
+        assert tinvest_counter.call_count == first_n
         assert len(r["SBER"]) == 500

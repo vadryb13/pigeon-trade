@@ -5,10 +5,10 @@
 from __future__ import annotations
 
 import sys
-import types
-from unittest.mock import MagicMock
 
 import pytest
+
+from conftest import fake_openai_module
 
 
 @pytest.fixture(autouse=True)
@@ -18,71 +18,8 @@ def _stable_secret(monkeypatch):
 
 @pytest.fixture
 def fake_openai(monkeypatch):
-    """Подменяет openai.AsyncOpenAI().embeddings.create() фейком.
-
-    Возвращает вектор размерности EMBEDDING_DIM = 1536 с уникальными
-    значениями для разных текстов, чтобы cosine similarity работала.
-    """
-    from aqr.registry.embeddings import EMBEDDING_DIM
-
-    _responses: dict[str, list[float]] = {}
-
-    def make_embedding(text: str) -> list[float]:
-        # Детерминированно из hash, но с разным seed для разных текстов
-        import hashlib
-        digest = hashlib.sha256(text.encode()).digest()
-        repeats = (EMBEDDING_DIM // 32) + 1
-        raw = (digest * repeats)[:EMBEDDING_DIM]
-        return [(b / 255.0) for b in raw]
-
-    class _FakeEmbeddingsAPI:
-        def __init__(self, **kw):
-            pass
-
-        async def create(self, *, model, input):
-            if isinstance(input, str):
-                inputs = [input]
-            else:
-                inputs = input
-            data = [
-                MagicMock(embedding=make_embedding(t)) for t in inputs
-            ]
-            resp = MagicMock()
-            resp.data = data
-            return resp
-
-    class _FakeAsyncOpenAI:
-        def __init__(self, api_key=None, **kw):
-            self._embeddings = _FakeEmbeddingsAPI()
-
-        @property
-        def embeddings(self):
-            return self._embeddings
-
-    fake_module = types.ModuleType("openai")
-    fake_module.AsyncOpenAI = _FakeAsyncOpenAI
-    monkeypatch.setitem(sys.modules, "openai", fake_module)
-
-    return make_embedding
-
-
-@pytest.fixture
-def with_credentials():
-    """Устанавливает credentials в ContextVar с OPENAI_API_KEY."""
-    from aqr.graph.context import reset_credentials, set_credentials
-    from aqr.registry import DecryptedSettings
-
-    creds = DecryptedSettings(
-        session_id="alice",
-        llm_model="claude-3-5-sonnet-20241022",
-        llm_api_key="sk-ant-fake",
-        openai_api_key="sk-oai-fake",
-        invest_token="t.INVEST_TOKEN_fake",
-        invest_sandbox=True,
-    )
-    token = set_credentials(creds)
-    yield creds
-    reset_credentials(token)
+    """Подменяет openai.AsyncOpenAI().embeddings.create() фейком."""
+    monkeypatch.setitem(sys.modules, "openai", fake_openai_module())
 
 
 class TestEmbedderRequiresKey:

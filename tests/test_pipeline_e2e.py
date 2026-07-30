@@ -4,55 +4,12 @@
 """
 from __future__ import annotations
 
-import sys
-import types
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 from aqr.pipeline import ResearchPlanner
 from aqr.pipeline.executor import BacktestResult, PipelineResult
 from aqr.pipeline.hypotheses import HypothesisSpec
 from aqr.pipeline.planner import ResearchPlan
-
-
-@pytest.fixture(autouse=True)
-def _stable_secret(monkeypatch):
-    monkeypatch.setenv("AQR_SESSION_SECRET", "test-secret-padded-to-32-bytes-base64==")
-
-
-def _fake_credentials():
-    from aqr.registry import DecryptedSettings
-    return DecryptedSettings(
-        session_id="alice",
-        llm_model="claude-3-5-sonnet-20241022",
-        llm_api_key="sk-ant-fake",
-        openai_api_key="sk-oai-fake",
-        invest_token="t.INVEST_TOKEN_fake",
-        invest_sandbox=True,
-    )
-
-
-@pytest.fixture
-def active_credentials(monkeypatch):
-    """Устанавливает credentials в ContextVar, очищает на teardown."""
-    from aqr.graph.context import reset_credentials, set_credentials
-
-    token = set_credentials(_fake_credentials())
-    yield _fake_credentials()
-    reset_credentials(token)
-
-
-@pytest.fixture
-def fake_litellm(monkeypatch):
-    """Подменяет litellm.acompletion фейковым async-моком."""
-    fake_resp = MagicMock()
-    fake_resp.choices = [MagicMock()]
-    fake_resp.choices[0].message.content = "{}"
-    fake_module = types.ModuleType("litellm")
-    fake_module.acompletion = AsyncMock(return_value=fake_resp)
-    monkeypatch.setitem(sys.modules, "litellm", fake_module)
-    return fake_module.acompletion
 
 
 class TestPlannerRequiresCredentials:
@@ -113,10 +70,10 @@ class TestNarratorRequiresCredentials:
 
 class TestPlannerWithMockedLLM:
     async def test_parses_llm_json_response(
-        self, active_credentials, fake_litellm, monkeypatch
+        self, with_credentials, fake_litellm, monkeypatch
     ):
         """С credentials + мок LLM — план парсится из JSON-ответа."""
-        fake_litellm.return_value.choices[0].message.content = (
+        fake_litellm(
             '{"tickers": ["GAZP"], "timeframe": "H1", '
             '"start_date": "2024-01-01", "end_date": "2024-12-31", '
             '"hypothesis_families": ["breakout"], '
@@ -131,10 +88,10 @@ class TestPlannerWithMockedLLM:
         assert plan.n_hypotheses == 30
 
     async def test_uses_defaults_when_json_incomplete(
-        self, active_credentials, fake_litellm, monkeypatch
+        self, with_credentials, fake_litellm, monkeypatch
     ):
         """LLM вернул неполный JSON — дефолты применяются."""
-        fake_litellm.return_value.choices[0].message.content = "{}"
+        fake_litellm("{}")
         monkeypatch.setenv("AQR_LLM_MODEL", "claude-3-5-sonnet-20241022")
 
         plan = await ResearchPlanner().plan("тест")
