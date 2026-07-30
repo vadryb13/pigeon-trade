@@ -88,29 +88,20 @@
 | P0. Full graphs page (`/explore/{id}/graphs`) | ✅ |
 | P0. Activity page (`/activity`) | ✅ |
 | P1. By ticker tab | ✅ |
+| P1. Dynamic data (RegistryStore API + frontend fetch) | ✅ |
 
 ---
 
-## Gap 6: Dynamic data from backend
+## Остаётся (P2)
 
-**Что нужно:**
-- API-эндпоинт `GET /api/explore/hypotheses` — список гипотез (id, ticker, family, metrics, status, owner)
-- API-эндпоинт `GET /api/explore/hypotheses/{id}` — детали гипотезы + историю событий
-- API-эндпоинт `GET /api/explore/stats` — количество, win rate, last activity
-- API-эндпоинт `GET /api/explore/activity` — лента событий за 7 дней
-- Frontend: замена статических sample-data на fetch + render
+- **Presence indicators** — WS/SSE + кто смотрит какую гипотезу
+- **Pessimistic lock** — блокировка строк при редактировании, таймер авто-освобождения
 
-**Требуется backend:**
-- `RegistryStore.list_hypotheses()` — выборка всех гипотез с метриками
-- `RegistryStore.get_hypothesis_with_events()` — гипотеза + лента событий
-- `RegistryStore.get_stats()` — агрегатные метрики
-- `RegistryStore.get_recent_events(days=7)` — лента событий
-- API-эндпоинты в `aqr/explore/api.py`
-- FastAPI router, подключение к main.py
+Оба требуют backend SSE-инфраструктуры. Решать отдельно.
 
-**Зависимости:** таблицы `hypotheses` и `hypothesis_events` уже есть в Alembic-миграциях
+## Gap 6: Dynamic data from backend (✅ completed)
 
-**Оценка:** 3-5 дней (новые SQLAlchemy-запросы + тесты)
+4 новых метода в `RegistryStore`, 4 API-эндпоинта, фронтенд-рендер вместо статики.
 
 **Что нужно:**
 - Заменить статические sample-data на реальные данные из реестра
@@ -130,6 +121,6 @@
 | P0 | **Full graphs page** | ✅ |
 | P0 | **Activity page** | ✅ |
 | P1 | **By ticker tab** | ✅ |
-| P1 | **Dynamic data** | ❌ — требуется RegistryStore API + endpoints |
+| P1 | **Dynamic data** | ✅ — RegistryStore API + endpoints + frontend fetch |
 | P2 | **Presence indicators** | ❌ — требуется backend SSE |
 | P2 | **Pessimistic lock** | ❌ — требуется backend SSE + Postgres |
