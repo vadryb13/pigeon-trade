@@ -34,6 +34,7 @@ from aqr.api.routes import router as v04_router
 from aqr.background import drain as async_drain
 from aqr.chat import chat_router
 from aqr.chat.web import router as chat_web_router
+from aqr.explore.router import router as explore_router
 from aqr.logging_config import setup_logging
 from aqr.pipeline.api import router as pipeline_router
 from aqr.startup import validate_runtime
@@ -90,6 +91,7 @@ app.include_router(pipeline_router)
 app.include_router(chat_router)
 app.include_router(chat_web_router)
 app.include_router(v04_router)
+app.include_router(explore_router)
 
 
 @app.get("/health")

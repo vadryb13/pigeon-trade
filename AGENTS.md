@@ -74,9 +74,9 @@ aqr/
 | Что | Команда |
 |---|---|
 | Docker (всё) | `docker compose -f aqr-compose.yml up -d --build` |
-| HTTP | `uvicorn aqr.main:app --port 8000` |
-| Web UI | `http://localhost:8000/chat` |
 | Migrations | `.venv/bin/alembic upgrade head` или `docker compose exec app alembic upgrade head` |
+| Web UI (чат) | `http://localhost:8000/chat` |
+| Web UI (explore) | `http://localhost:8000/explore` |
 | Agent вызов | `from aqr.graph import run_agent; await run_agent(...)` |
 | WS | `WS /chat/{token}`, токен через `GET /chat/new?session_id=...` |
 | CI | `ruff check aqr/ tests/` → `PYTHONPATH=. pytest tests/ --cov=aqr --cov-fail-under=80` |

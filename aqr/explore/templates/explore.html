@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AQR · Explore</title>
+<style>
+:root {
+  --bg: #fafafa;
+  --panel: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --subtle: #9ca3af;
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --green: #047857;
+  --green-bg: #ecfdf5;
+  --red: #b91c1c;
+  --red-bg: #fef2f2;
+  --yellow: #92400e;
+  --yellow-bg: #fffbeb;
+  --purple: #6d28d9;
+  --purple-bg: #f5f3ff;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --code-bg: #f3f4f6;
+  --row-alt: #f9fafb;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+    system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+code, .mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+input, button { font: inherit; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 {
+  margin: 0; font-size: 16px; font-weight: 600; color: var(--accent);
+  letter-spacing: -0.01em;
+}
+.tabs { display: flex; gap: 8px; font-size: 13px; color: var(--muted); align-items: center; }
+.tabs .tab { cursor: pointer; padding: 6px 12px; border-radius: 6px; }
+.tabs .tab:hover { background: var(--row-alt); }
+.tabs .tab.active { color: var(--text); background: var(--accent-bg); }
+.tabs .tab-accent {
+  background: var(--accent); color: #fff; padding: 6px 14px;
+  border-radius: 6px; font-weight: 600; cursor: pointer;
+}
+.tabs .tab-accent:hover { opacity: 0.9; }
+.stats {
+  display: flex; align-items: center; gap: 24px;
+  padding: 10px 24px; font-size: 12px; color: var(--muted);
+  border-bottom: 1px solid var(--border); flex-wrap: wrap;
+}
+.stats strong { color: var(--text); font-weight: 500; }
+.chip {
+  background: var(--code-bg); padding: 3px 10px; border-radius: 12px;
+  border: 1px solid var(--border); font-size: 12px;
+}
+.chip strong { color: var(--accent); }
+
+/* Empty state */
+.main-empty {
+  max-width: 640px; margin: 48px auto; padding: 0 24px;
+  text-align: center;
+}
+.empty-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 56px 40px;
+}
+.empty-card h2 {
+  font-size: 22px; font-weight: 500; color: var(--text);
+  margin: 0 0 10px; letter-spacing: -0.02em;
+}
+.empty-card p {
+  color: var(--muted); margin: 0 0 28px; font-size: 14px; line-height: 1.6;
+}
+.count-input {
+  display: inline-flex; align-items: center; gap: 10px;
+  margin: 0 0 24px;
+  background: var(--code-bg); border: 1px solid var(--border);
+  padding: 10px 16px; border-radius: 10px;
+}
+.count-input label { font-size: 13px; color: var(--muted); }
+.count-input .num-wrap {
+  display: inline-flex; align-items: center;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; overflow: hidden;
+}
+.count-input .num-wrap input {
+  width: 56px; padding: 5px 8px; background: transparent;
+  border: 0; color: var(--text); font-size: 18px;
+  font-weight: 600; text-align: center;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.count-input .num-wrap input:focus { outline: none; background: var(--accent-bg); }
+.count-input .num-wrap input::-webkit-outer-spin-button,
+.count-input .num-wrap input::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.count-input .num-wrap span {
+  padding: 0 12px; color: var(--muted); font-size: 13px;
+  border-left: 1px solid var(--border);
+}
+.count-input .hint { font-size: 11px; color: var(--subtle); font-style: italic; }
+.btn {
+  padding: 8px 18px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); cursor: pointer;
+  font: inherit; font-size: 13px; display: inline-flex; align-items: center;
+  gap: 8px; white-space: nowrap;
+}
+.btn:hover { background: var(--code-bg); }
+.btn-primary {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+  font-weight: 600;
+}
+.btn-primary:hover { opacity: 0.9; background: var(--accent); }
+.btn-lg { padding: 12px 28px; font-size: 15px; }
+.tip {
+  margin: 20px auto 0; max-width: 580px;
+  padding: 14px 20px; background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 8px; text-align: left; font-size: 13px; color: var(--muted);
+  line-height: 1.6;
+}
+.tip strong { color: var(--accent); }
+.tip ul { margin: 8px 0 0; padding-left: 20px; line-height: 1.7; }
+.tip code {
+  background: var(--panel); padding: 1px 5px; border-radius: 3px;
+  font-size: 12px; color: var(--text);
+}
+
+/* Filter bar */
+.filterbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 24px; border-bottom: 1px solid var(--border);
+  font-size: 13px; color: var(--muted); flex-wrap: wrap;
+}
+.filterbar-label { color: var(--muted); font-weight: 500; margin-right: 4px; }
+.filter-pill {
+  padding: 3px 12px; border-radius: 16px; background: var(--panel);
+  border: 1px solid var(--border); cursor: pointer; font-size: 12px;
+}
+.filter-pill:hover { background: var(--code-bg); }
+.filter-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.filter-pill.active:hover { opacity: 0.9; background: var(--accent); }
+.filter-right { margin-left: auto; display: flex; gap: 8px; }
+
+/* Toolbar */
+.toolbar-row {
+  display: flex; gap: 8px; align-items: center;
+  padding: 10px 24px; border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.presence {
+  margin-left: auto; font-size: 12px; color: var(--muted);
+  display: flex; gap: 12px; align-items: center;
+}
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th {
+  background: var(--code-bg); font-weight: 500; color: var(--muted);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;
+  user-select: none;
+}
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--accent-bg); }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:nth-child(even):hover { background: var(--accent-bg); }
+tbody tr.locked { opacity: 0.55; }
+.id { font-family: ui-monospace, "SF Mono", monospace; color: var(--muted); font-size: 12px; }
+.name { color: var(--accent); font-weight: 500; }
+.sh { color: var(--text); font-variant-numeric: tabular-nums; }
+.sh-num { font-variant-numeric: tabular-nums; text-align: right; }
+.tag {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.01em;
+}
+.tag-screening { background: var(--accent-bg); color: var(--accent); }
+.tag-validating { background: var(--yellow-bg); color: var(--yellow); }
+.tag-approved { background: var(--green-bg); color: var(--green); }
+.tag-rejected { background: var(--red-bg); color: var(--red); }
+.tag-archived { background: var(--code-bg); color: var(--muted); }
+.tag-idea { background: #f3f4f6; color: var(--subtle); }
+.up { color: var(--green); }
+.down { color: var(--red); }
+.owner { color: var(--muted); font-size: 12px; }
+.footer-note {
+  padding: 12px 24px; font-size: 12px; color: var(--muted);
+  border-top: 1px solid var(--border); background: var(--panel);
+}
+
+/* Activity tab */
+.view { display: none; }
+.view.active { display: block; }
+.activity-view {
+  padding: 24px; max-width: 720px; margin: 0 auto;
+}
+.activity-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.activity-item:first-child { padding-top: 0; }
+.activity-icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--code-bg); display: flex; align-items: center;
+  justify-content: center; font-size: 13px; flex-shrink: 0;
+}
+.activity-icon.create { background: var(--green-bg); color: var(--green); }
+.activity-icon.update { background: var(--accent-bg); color: var(--accent); }
+.activity-icon.reject { background: var(--red-bg); color: var(--red); }
+.activity-body { flex: 1; }
+.activity-body .desc { color: var(--text); font-size: 13px; }
+.activity-body .desc a { color: var(--accent); text-decoration: none; }
+.activity-body .desc a:hover { text-decoration: underline; }
+.activity-body .time { color: var(--subtle); font-size: 11px; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>AQR · Explore</h1>
+  <div class="tabs" id="tabs">
+    <span class="tab active" data-view="spreadsheet">Spreadsheet</span>
+    <span class="tab" data-view="activity">Activity</span>
+    <span class="tab tab-accent" data-view="new">+ New</span>
+  </div>
+</div>
+
+<div class="stats">
+  <span>Explored <strong id="stat-count">47</strong> hypotheses</span>
+  <span>Win rate <strong>26%</strong> (12 approved / 47 total)</span>
+  <span>Last activity <strong>2h ago</strong> · bob viewed #42</span>
+  <span class="chip"><strong>5</strong> with new runs today</span>
+</div>
+
+<!-- Spreadsheet View -->
+<div class="view active" id="view-spreadsheet">
+  <div class="filterbar">
+    <span class="filterbar-label">Status:</span>
+    <span class="filter-pill active" data-filter="all">All (47)</span>
+    <span class="filter-pill" data-filter="screening">Screening (8)</span>
+    <span class="filter-pill" data-filter="validating">Validating (2)</span>
+    <span class="filter-pill" data-filter="approved">Approved (12)</span>
+    <span class="filter-pill" data-filter="rejected">Rejected (15)</span>
+    <span class="filter-pill" data-filter="archived">Archived (10)</span>
+    <span class="filter-right">
+      <span class="filter-pill">Sort: DSR ▾</span>
+      <span class="filter-pill">Ticker ▾</span>
+    </span>
+  </div>
+
+  <div class="toolbar-row">
+    <button class="btn btn-primary">Run screening <span id="sel-count">(3 selected)</span></button>
+    <button class="btn">Suggest variants</button>
+    <button class="btn">Archive</button>
+    <div class="presence">
+      <span><span class="dot"></span> alice online</span>
+      <span><span class="dot" style="background: var(--yellow);"></span> bob online · viewing #42</span>
+    </div>
+  </div>
+
+  <div class="table-wrap" id="empty-table-placeholder" style="display:none;">
+    <div class="main-empty">
+      <div class="empty-card">
+        <h2>Generate hypotheses as a batch.</h2>
+        <p>
+          AI ищет контекст (новости, фундаментал, похожие гипотезы),
+          формирует экономическую гипотезу и предлагает параметры.
+          Каждая гипотеза — в отдельной ячейке, изолированно от других.
+          Финальный отбор — за тобой.
+        </p>
+        <div class="count-input">
+          <label for="count">Generate</label>
+          <div class="num-wrap">
+            <input id="count" type="number" value="3" min="1" max="20">
+            <span>hypotheses</span>
+          </div>
+          <span class="hint">max 20 · default 3</span>
+        </div>
+        <div>
+          <button class="btn btn-primary btn-lg">Generate &amp; research in parallel →</button>
+        </div>
+      </div>
+      <div class="tip">
+        <strong>Что происходит в каждой ячейке:</strong>
+        <ul>
+          <li><strong>Browser-agent</strong> ищет новости / статьи / фундаментал по теме гипотезы</li>
+          <li><strong>Analyst-agent</strong> смотрит существующие похожие гипотезы в реестре (<code>find_duplicates</code>)</li>
+          <li><strong>Editor-agent</strong> формулирует экономическую гипотезу с rationale</li>
+          <li>AI применяет дефолты для неизвестных полей (period=3y, timeframe=D1, signal=family-default)</li>
+        </ul>
+        Только ты решаешь что добавляется в <code>/explore</code> spreadsheet — с кнопкой Confirm в каждой ячейке.
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap" id="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 32px;"><input type="checkbox" id="select-all"></th>
+          <th>id</th>
+          <th>status</th>
+          <th>hypothesis</th>
+          <th>ticker</th>
+          <th style="text-align: right;">Sharpe</th>
+          <th style="text-align: right;">DSR</th>
+          <th style="text-align: right;">PBO</th>
+          <th>stability</th>
+          <th>owner</th>
+          <th>updated</th>
+        </tr>
+      </thead>
+      <tbody id="table-body">
+        <tr data-id="42" data-status="approved">
+          <td><input type="checkbox" class="row-check" checked onclick="event.stopPropagation()"></td>
+          <td class="id">#42</td>
+          <td><span class="tag tag-approved">approved</span></td>
+          <td class="name">SMA5/50 momentum</td>
+          <td>SBER</td>
+          <td class="sh-num">1.85</td>
+          <td class="sh-num up">0.96</td>
+          <td class="sh-num">0.28</td>
+          <td>4/4</td>
+          <td class="owner">alice</td>
+          <td class="owner">4h ago</td>
+        </tr>
+        <tr data-id="38" data-status="screening">
+          <td><input type="checkbox" class="row-check" checked onclick="event.stopPropagation()"></td>
+          <td class="id">#38</td>
+          <td><span class="tag tag-screening">screening</span></td>
+          <td class="name">RSI(14)+ATR</td>
+          <td>GAZP</td>
+          <td class="sh-num">1.10</td>
+          <td class="sh-num">0.71</td>
+          <td class="sh-num">0.45</td>
+          <td>2/4</td>
+          <td class="owner">bob</td>
+          <td class="owner">2h ago</td>
+        </tr>
+        <tr data-id="35" data-status="rejected">
+          <td><input type="checkbox" class="row-check" checked onclick="event.stopPropagation()"></td>
+          <td class="id">#35</td>
+          <td><span class="tag tag-rejected">rejected</span></td>
+          <td class="name">BBands breakout</td>
+          <td>LKOH</td>
+          <td class="sh-num down">-0.30</td>
+          <td class="sh-num down">0.12</td>
+          <td class="sh-num down">0.62</td>
+          <td>—</td>
+          <td class="owner">alice</td>
+          <td class="owner">3d ago</td>
+        </tr>
+        <tr data-id="29" data-status="validating">
+          <td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>
+          <td class="id">#29</td>
+          <td><span class="tag tag-validating">validating</span></td>
+          <td class="name">Mom-divergence</td>
+          <td>SBER</td>
+          <td class="sh-num">?</td>
+          <td class="sh-num">—</td>
+          <td class="sh-num">—</td>
+          <td>1/4 ◐</td>
+          <td class="owner">alice</td>
+          <td class="owner">1d ago</td>
+        </tr>
+        <tr data-id="51" data-status="idea" class="locked">
+          <td><input type="checkbox" class="row-check" disabled onclick="event.stopPropagation()"></td>
+          <td class="id">#51</td>
+          <td><span class="tag tag-idea">idea</span></td>
+          <td class="name">Donchian 20/55</td>
+          <td>GAZP</td>
+          <td class="sh-num">—</td>
+          <td class="sh-num">—</td>
+          <td class="sh-num">—</td>
+          <td>—</td>
+          <td class="owner">alice</td>
+          <td class="owner">just now</td>
+        </tr>
+        <tr data-id="20" data-status="approved">
+          <td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>
+          <td class="id">#20</td>
+          <td><span class="tag tag-approved">approved</span></td>
+          <td class="name">Z-score mean-reversion</td>
+          <td>SBER</td>
+          <td class="sh-num">1.42</td>
+          <td class="sh-num up">0.89</td>
+          <td class="sh-num">0.31</td>
+          <td>4/4</td>
+          <td class="owner">alice</td>
+          <td class="owner">5d ago</td>
+        </tr>
+        <tr data-id="18" data-status="archived">
+          <td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>
+          <td class="id">#18</td>
+          <td><span class="tag tag-archived">archived</span></td>
+          <td class="name">Elder impulse</td>
+          <td>VTBR</td>
+          <td class="sh-num">0.72</td>
+          <td class="sh-num">0.45</td>
+          <td class="sh-num">0.51</td>
+          <td>3/4</td>
+          <td class="owner">bob</td>
+          <td class="owner">1w ago</td>
+        </tr>
+        <tr data-id="15" data-status="screening">
+          <td><input type="checkbox" class="row-check" onclick="event.stopPropagation()"></td>
+          <td class="id">#15</td>
+          <td><span class="tag tag-screening">screening</span></td>
+          <td class="name">VWAP reversion</td>
+          <td>SBER</td>
+          <td class="sh-num">0.93</td>
+          <td class="sh-num">0.62</td>
+          <td class="sh-num">0.39</td>
+          <td>2/4</td>
+          <td class="owner">alice</td>
+          <td class="owner">6d ago</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer-note">
+    Compare overlay: rows #42, #38, #35 highlighted for side-by-side review.
+    Locked row (#51): alice editing — read-only for others.
+  </div>
+</div>
+
+<!-- Activity View -->
+<div class="view" id="view-activity">
+  <div class="activity-view">
+    <div class="activity-item">
+      <div class="activity-icon create">+</div>
+      <div class="activity-body">
+        <div class="desc"><a href="/explore/42">#42</a> · SMA5/50 momentum — approved by alice</div>
+        <div class="time">2 hours ago</div>
+      </div>
+    </div>
+    <div class="activity-item">
+      <div class="activity-icon update">~</div>
+      <div class="activity-body">
+        <div class="desc"><a href="/explore/38">#38</a> · RSI(14)+ATR — screening run completed, Sharpe 1.10</div>
+        <div class="time">2 hours ago</div>
+      </div>
+    </div>
+    <div class="activity-item">
+      <div class="activity-icon create">+</div>
+      <div class="activity-body">
+        <div class="desc"><a href="/explore/51">#51</a> · Donchian 20/55 — created by alice (edit in progress)</div>
+        <div class="time">3 hours ago</div>
+      </div>
+    </div>
+    <div class="activity-item">
+      <div class="activity-icon reject">✕</div>
+      <div class="activity-body">
+        <div class="desc"><a href="/explore/35">#35</a> · BBands breakout — rejected by bob</div>
+        <div class="time">3 days ago</div>
+      </div>
+    </div>
+    <div class="activity-item">
+      <div class="activity-icon update">~</div>
+      <div class="activity-body">
+        <div class="desc"><a href="/explore/20">#20</a> · Z-score mean-reversion — validating metrics updated</div>
+        <div class="time">5 days ago</div>
+      </div>
+    </div>
+    <div class="activity-item">
+      <div class="activity-icon update">~</div>
+      <div class="activity-body">
+        <div class="desc"><a href="/explore/15">#15</a> · VWAP reversion — added to screening queue</div>
+        <div class="time">6 days ago</div>
+      </div>
+    </div>
+    <div class="activity-item">
+      <div class="activity-icon create">+</div>
+      <div class="activity-body">
+        <div class="desc"><a href="/explore/18">#18</a> · Elder impulse — hypothesis registered</div>
+        <div class="time">1 week ago</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Tab switching
+  const tabs = document.querySelectorAll('#tabs .tab[data-view]');
+  const views = {
+    spreadsheet: document.getElementById('view-spreadsheet'),
+    activity: document.getElementById('view-activity'),
+  };
+
+  function switchTab(name) {
+    if (name === 'new') {
+      const placeholder = document.getElementById('empty-table-placeholder');
+      if (placeholder) {
+        placeholder.style.display = 'block';
+        placeholder.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+    Object.entries(views).forEach(([key, el]) => {
+      el.classList.toggle('active', key === name);
+    });
+    tabs.forEach(t => {
+      const v = t.getAttribute('data-view');
+      t.classList.toggle('active', v === name);
+    });
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', function(e) {
+      const view = this.getAttribute('data-view');
+      switchTab(view);
+    });
+  });
+
+  // Row click → navigate to /explore/{id}
+  document.querySelectorAll('#table-body tr').forEach(row => {
+    row.addEventListener('click', function(e) {
+      if (e.target.closest('input[type="checkbox"]')) return;
+      const id = this.getAttribute('data-id');
+      if (id) window.location.href = '/explore/' + id;
+    });
+  });
+
+  // Select all checkbox
+  const selectAll = document.getElementById('select-all');
+  if (selectAll) {
+    selectAll.addEventListener('change', function() {
+      const checks = document.querySelectorAll('#table-body .row-check:not(:disabled)');
+      checks.forEach(c => { c.checked = this.checked; });
+      updateSelCount();
+    });
+  }
+
+  // Individual checkboxes update selection count
+  document.querySelectorAll('#table-body .row-check').forEach(cb => {
+    cb.addEventListener('change', updateSelCount);
+  });
+
+  function updateSelCount() {
+    const sel = document.querySelectorAll('#table-body .row-check:checked').length;
+    const el = document.getElementById('sel-count');
+    if (el) el.textContent = '(' + sel + ' selected)';
+  }
+
+  // Filter pills
+  document.querySelectorAll('.filter-pill[data-filter]').forEach(pill => {
+    pill.addEventListener('click', function() {
+      const filter = this.getAttribute('data-filter');
+      document.querySelectorAll('.filter-pill[data-filter]').forEach(p => {
+        p.classList.toggle('active', p === this);
+      });
+      const rows = document.querySelectorAll('#table-body tr');
+      rows.forEach(row => {
+        const status = row.getAttribute('data-status') || '';
+        if (filter === 'all' || status === filter) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      updateSelCount();
+    });
+  });
+
+  // Multi-select for sorting pills
+  document.querySelectorAll('.filter-pill').forEach(pill => {
+    if (!pill.hasAttribute('data-filter')) {
+      pill.addEventListener('click', function() {
+        this.classList.toggle('active');
+      });
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

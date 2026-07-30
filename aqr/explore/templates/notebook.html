@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AQR · Hypothesis #{{HYP_ID}} · Notebook</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --text: #111827;
+    --muted: #6b7280;
+    --subtle: #9ca3af;
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+    --green: #047857;
+    --green-bg: #ecfdf5;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+    --yellow: #92400e;
+    --yellow-bg: #fffbeb;
+    --purple: #6d28d9;
+    --purple-bg: #f5f3ff;
+    --border: #e5e7eb;
+    --border-strong: #d1d5db;
+    --code-bg: #f3f4f6;
+    --row-alt: #f9fafb;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+      system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, .mono {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+  }
+  input, button, textarea, select { font: inherit; }
+
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar h1 {
+    margin: 0; font-size: 16px; font-weight: 600; color: var(--accent);
+    letter-spacing: -0.01em;
+  }
+  .topbar h1 a { color: var(--accent); text-decoration: none; }
+  .crumbs { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .crumbs a { color: var(--accent); text-decoration: none; }
+  .crumbs a:hover { text-decoration: underline; }
+  .crumbs span.sep { margin: 0 8px; color: var(--subtle); }
+  .crumbs strong { color: var(--text); }
+  .presence-indicator {
+    font-size: 12px; color: var(--muted);
+    display: flex; gap: 14px; align-items: center;
+  }
+  .presence-indicator .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); margin-right: 4px;
+  }
+  .presence-indicator .dot.yellow { background: var(--yellow); }
+
+  .title-row {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 22px 32px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .title-row h2 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+  .title-meta {
+    display: flex; gap: 14px; font-size: 12px; color: var(--muted);
+    align-items: center; flex-wrap: wrap;
+  }
+  .title-meta strong { color: var(--text); font-weight: 500; }
+
+  .tag {
+    display: inline-block; padding: 4px 12px; border-radius: 14px;
+    font-size: 12px; font-weight: 500; letter-spacing: 0.01em;
+  }
+  .tag-idea { background: var(--code-bg); color: var(--subtle); }
+  .tag-screening { background: var(--accent-bg); color: var(--accent); }
+  .tag-validating { background: var(--yellow-bg); color: var(--yellow); }
+  .tag-approved { background: var(--green-bg); color: var(--green); }
+  .tag-rejected { background: var(--red-bg); color: var(--red); }
+  .tag-archived { background: var(--code-bg); color: var(--muted); }
+  .tag-pending { background: var(--purple-bg); color: var(--purple); }
+
+  .lock-banner {
+    margin: 16px 32px 0;
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255, 212, 59, 0.08); border: 1px solid var(--yellow);
+    border-radius: 6px; padding: 10px 14px; font-size: 13px; color: var(--yellow);
+  }
+  .lock-banner strong { color: var(--yellow); }
+  .lock-banner .btn {
+    background: transparent; padding: 4px 12px; font-size: 12px;
+    color: var(--yellow); border-color: var(--yellow);
+  }
+
+  .tabs-row {
+    display: flex; gap: 2px; align-items: stretch;
+    padding: 0 32px; margin-top: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tabs-row button {
+    background: transparent; border: 0; color: var(--muted);
+    padding: 10px 18px; font: inherit; font-size: 13px; cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tabs-row button:hover { color: var(--text); }
+  .tabs-row button.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tabs-row button .badge {
+    background: var(--code-bg); color: var(--muted);
+    padding: 1px 6px; border-radius: 8px; font-size: 11px; margin-left: 6px;
+  }
+  .tabs-row button.active .badge { color: var(--accent); background: var(--accent-bg); }
+  .tabs-row .tab-link {
+    padding: 10px 16px; font-size: 13px; color: var(--accent);
+    text-decoration: none; display: inline-flex; align-items: center;
+    gap: 6px; margin-left: auto;
+  }
+  .tabs-row .tab-link:hover { text-decoration: underline; }
+
+  .content { max-width: 960px; margin: 0 auto; padding: 0 32px 80px; }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  .workspace-pane {
+    display: grid; grid-template-rows: auto 1fr auto;
+    min-height: calc(100vh - 260px);
+  }
+
+  .status-panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 20px; margin: 24px 0 14px;
+  }
+  .status-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .status-head .status-left {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .status-head .status-left .active-agent {
+    color: var(--muted); font-size: 13px;
+  }
+  .status-head .status-left .active-agent strong {
+    color: var(--accent);
+  }
+  .status-head .status-right {
+    font-size: 12px; color: var(--muted);
+  }
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr); gap: 12px;
+    padding-top: 10px; font-size: 13px; color: var(--muted);
+  }
+  .status-grid span strong { color: var(--text); font-weight: 500; }
+  .status-grid .val { color: var(--text); font-weight: 500; }
+  .status-grid .good { color: var(--green); }
+
+  .chat-thread {
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 14px 0; overflow-y: auto;
+  }
+
+  .bubble {
+    max-width: 92%; padding: 10px 14px;
+    border-radius: 12px; font-size: 13px; line-height: 1.5;
+  }
+  .bubble-user {
+    align-self: flex-end;
+    background: rgba(124, 183, 255, 0.12);
+    border: 1px solid rgba(124, 183, 255, 0.3);
+    color: var(--text);
+    border-bottom-right-radius: 4px;
+  }
+  .bubble-ai {
+    align-self: flex-start;
+    background: rgba(192, 132, 252, 0.10);
+    border: 1px solid rgba(192, 132, 252, 0.3);
+    color: var(--text);
+    border-bottom-left-radius: 4px;
+    max-width: 80%;
+  }
+  .bubble-system {
+    align-self: center;
+    background: var(--code-bg); border: 1px dashed var(--border);
+    color: var(--muted); font-size: 12px; padding: 6px 12px;
+    font-style: italic; max-width: 70%;
+  }
+  .bubble-info {
+    align-self: stretch;
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); max-width: 100%;
+    border-radius: 10px;
+  }
+  .bubble-head {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 4px; font-size: 11px;
+  }
+  .bubble-head .avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+  }
+  .bubble-user .avatar { background: var(--accent); color: #fff; }
+  .bubble-ai .avatar { background: var(--purple); color: #fff; }
+  .bubble .who { color: var(--text); font-weight: 600; }
+  .bubble .ts { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bubble .body { color: var(--text); }
+  .bubble .body strong { font-weight: 600; }
+  .bubble .body em { color: var(--muted); }
+
+  .variants {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin: 10px 0 8px;
+  }
+  .variant {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px;
+    font-size: 12px;
+  }
+  .variant.recommended { border-color: var(--green); background: var(--green-bg); }
+  .variant .name { font-weight: 600; margin-bottom: 4px; color: var(--text); }
+  .variant .params {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--muted); font-size: 11px;
+  }
+  .variant .metrics {
+    margin: 6px 0; font-variant-numeric: tabular-nums;
+  }
+  .variant .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 8px;
+    font-size: 10px; font-weight: 600;
+  }
+  .variant.recommended .badge {
+    background: rgba(81, 207, 102, 0.18); color: var(--green);
+  }
+  .variant .buttons {
+    display: flex; gap: 6px; margin-top: 6px;
+  }
+  .variant .btn { padding: 4px 10px; font-size: 12px; }
+
+  .result-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin: 6px 0; font-size: 13px;
+  }
+  .result-card .title { font-weight: 600; margin-bottom: 6px; color: var(--text); font-size: 12px; }
+  .result-row { display: flex; gap: 18px; flex-wrap: wrap; }
+  .result-row .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .result-row .value { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  .action-cue {
+    text-align: center; color: var(--muted); font-size: 12px; padding: 14px;
+  }
+
+  .composer {
+    position: sticky; bottom: 0;
+    background: var(--panel); border-top: 1px solid var(--border);
+    padding: 12px 0 14px;
+    margin-top: 8px;
+  }
+  .composer-wrap { max-width: 960px; margin: 0 auto; }
+  .composer-input {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 10px 14px; border-radius: 8px; font: inherit; font-size: 14px;
+    width: 100%; resize: vertical; min-height: 44px;
+  }
+  .composer-input:focus { outline: none; border-color: var(--accent); }
+  .composer-hint {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 8px; font-size: 11px; color: var(--muted); flex-wrap: wrap;
+  }
+  .composer-hint .slash {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    padding: 2px 6px; background: var(--code-bg); border-radius: 4px;
+  }
+  .composer-send {
+    margin-left: auto;
+    padding: 10px 20px; border-radius: 6px;
+    background: var(--accent); color: #fff; border: none;
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .composer-send:hover { opacity: 0.9; }
+  .composer-bottom {
+    display: flex; align-items: center; margin-top: 8px;
+  }
+  .composer-kbd {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before {
+    content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px;
+    width: 1px; background: var(--border);
+  }
+  .event {
+    position: relative; padding: 10px 0 10px 0;
+    font-size: 13px; line-height: 1.5;
+  }
+  .event::before {
+    content: ""; position: absolute; left: -21px; top: 16px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--panel); border: 2px solid var(--border);
+  }
+  .event-create::before { background: var(--accent); border-color: var(--accent); }
+  .event-edit::before { background: var(--yellow); border-color: var(--yellow); }
+  .event-rerun::before { background: var(--purple); border-color: var(--purple); }
+  .event-approve::before { background: var(--green); border-color: var(--green); }
+  .event-reject::before { background: var(--red); border-color: var(--red); }
+  .event-comment::before { background: var(--muted); border-color: var(--muted); }
+  .event-ai::before { background: #c084fc; border-color: #c084fc; }
+  .event-status::before { background: var(--muted); border-color: var(--muted); }
+
+  .event .ts { color: var(--muted); font-size: 11px; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .event .who { font-weight: 500; color: var(--text); margin-right: 8px; }
+  .event-icon { margin-right: 8px; font-size: 12px; }
+  .event .what { color: var(--text); margin-top: 4px; }
+  .event .diff { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--accent); font-size: 12px; }
+  .event .num { font-variant-numeric: tabular-nums; }
+  .event .up { color: var(--green); }
+  .event .down { color: var(--red); }
+  .event .target { color: var(--accent); font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .event .note { color: var(--muted); font-style: italic; }
+
+  .day-divider {
+    font-size: 12px; color: var(--muted); margin: 18px 0 8px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .day-divider::before, .day-divider::after {
+    content: ""; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .timeline-footer {
+    margin-top: 24px; text-align: center; color: var(--muted); font-size: 12px;
+  }
+  .timeline-footer a { color: var(--accent); text-decoration: none; }
+  .timeline-footer a:hover { text-decoration: underline; }
+
+  .graph-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-bottom: 16px;
+  }
+  .graph-card h4 {
+    margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--text);
+  }
+  .graph-card .subtitle { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .chart {
+    background: linear-gradient(180deg, rgba(124,183,255,0.04), transparent);
+    border: 1px solid var(--border); border-radius: 6px; padding: 12px;
+    height: 220px; position: relative; overflow: hidden;
+  }
+  .chart svg { width: 100%; height: 100%; display: block; }
+  .chart-legend {
+    display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .legend-dot {
+    display: inline-block; width: 10px; height: 2px;
+    vertical-align: middle; margin-right: 6px;
+  }
+
+  .stability {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .stability .window {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 14px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; flex-wrap: wrap; gap: 6px;
+  }
+  .stability .window.ok { border-left: 3px solid var(--green); }
+  .stability .window.fail { border-left: 3px solid var(--red); }
+  .stability .period { color: var(--muted); }
+  .stability .result { font-variant-numeric: tabular-nums; }
+  .stability .verdict-ok { color: var(--green); font-weight: 500; }
+  .stability .verdict-fail { color: var(--red); font-weight: 500; }
+  .stability .score {
+    margin-top: 8px; color: var(--green); font-size: 13px; text-align: right;
+  }
+
+  .btn {
+    padding: 7px 14px; border-radius: 5px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); cursor: pointer;
+    font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: var(--code-bg); }
+  .btn-success {
+    background: var(--green); color: #fff; border-color: var(--green);
+    font-weight: 600;
+  }
+  .btn-success:hover { opacity: 0.9; background: var(--green); }
+  .btn-danger {
+    background: var(--red); color: #fff; border-color: var(--red);
+    font-weight: 600;
+  }
+  .btn-danger:hover { opacity: 0.9; background: var(--red); }
+  .btn-ai {
+    background: linear-gradient(135deg, var(--purple), var(--accent));
+    color: #fff; border-color: transparent; font-weight: 500;
+  }
+  .btn-ai:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1><a href="/explore">AQR</a></h1>
+    <div class="crumbs">
+      <a href="/explore">/explore</a>
+      <span class="sep">›</span>
+      <strong>#{{HYP_ID}} SMA5/50 momentum on SBER</strong>
+    </div>
+  </div>
+  <div class="presence-indicator">
+    <span><span class="dot"></span> alice online</span>
+    <span><span class="dot yellow"></span> bob online · viewing this</span>
+  </div>
+</div>
+
+<div class="title-row">
+  <h2>#{{HYP_ID}} — SMA5/50 momentum on SBER</h2>
+  <span class="tag tag-screening">screening</span>
+  <div class="title-meta">
+    <span>owner: <strong>alice</strong></span>
+    <span>created 12d ago</span>
+    <span>updated 4h ago</span>
+    <span>7 backtests run</span>
+  </div>
+</div>
+
+<div class="lock-banner">
+  <strong>alice is editing this hypothesis.</strong>
+  Auto-release in <strong>4:32</strong> if idle.
+  <span style="margin-left: auto;">
+    <button class="btn">Notify when free</button>
+  </span>
+</div>
+
+<div class="tabs-row">
+  <button class="active" data-tab="workspace">
+    Workspace <span class="badge">live</span>
+  </button>
+  <button data-tab="history">
+    History <span class="badge">7</span>
+  </button>
+  <button data-tab="graphs">
+    Graphs <span class="badge">3</span>
+  </button>
+  <a href="/explore/{{HYP_ID}}/graphs" class="tab-link">Full graphs →</a>
+</div>
+
+<div class="content">
+
+<div data-pane="workspace" class="tab-pane active">
+  <div class="workspace-pane">
+
+    <div class="status-panel">
+      <div class="status-head">
+        <div class="status-left">
+          <span class="tag tag-screening">screening</span>
+          <span class="active-agent">
+            talking to <strong>analyst-agent</strong>
+            <span style="font-size: 11px;">— handles /run, cross-val, /approve</span>
+          </span>
+        </div>
+        <div class="status-right">
+          updated 4h ago · alice / bob viewing
+        </div>
+      </div>
+      <div class="status-grid">
+        <span>momentum · <strong>SBER</strong></span>
+        <span>tf <strong>H1</strong></span>
+        <span>2023-01 → <strong>2025-01</strong></span>
+        <span>fast=8 slow=50</span>
+        <span>cross-val <strong class="good">4/4</strong></span>
+        <span>Sharpe <strong>2.14</strong></span>
+      </div>
+    </div>
+
+    <div class="chat-thread">
+
+      <div class="bubble bubble-ai">
+        <div class="bubble-head">
+          <span class="avatar"></span>
+          <span class="who">editor-agent</span>
+          <span class="ts">3 min ago</span>
+        </div>
+        <div class="body">
+          <strong>Economic hypothesis:</strong> momentum-стратегия на голубых
+          фишках через SMA-кроссовер (5/50, H1). Устойчива в направленном
+          рынке нефтегаза и банков; главный риск — flat-периоды.
+          <br><br>
+          <strong>Context:</strong> 8 новостей · 2 похожих (#3 sh=1.10,
+          #19 sh=0.78) · took research ≈ 1m 12s
+          <br><br>
+          <em>3 варианта под эту идею:</em>
+
+          <div class="variants">
+            <div class="variant">
+              <div class="name">A · широкий</div>
+              <div class="params">fast=7 · slow=45</div>
+              <div class="metrics"><span class="badge">1.89</span><span style="color: var(--muted);">PBO 0.31</span></div>
+            </div>
+            <div class="variant recommended">
+              <div class="name">B · balanced</div>
+              <div class="params">fast=8 · slow=50 · tf=H1</div>
+              <div class="metrics"><span class="badge">2.14</span><span style="color: var(--green);">PBO 0.24</span></div>
+            </div>
+            <div class="variant">
+              <div class="name">C · консервативный</div>
+              <div class="params">fast=10 · slow=55</div>
+              <div class="metrics"><span class="badge">1.62</span><span style="color: var(--muted);">PBO 0.21</span></div>
+            </div>
+          </div>
+
+          /approve · /reject · /edit · /run B · /suggest variants
+        </div>
+      </div>
+
+      <div class="bubble bubble-user">
+        <div class="bubble-head">
+          <span class="avatar">a</span>
+          <span class="who">alice</span>
+          <span class="ts">1 min ago</span>
+        </div>
+        <div class="body">B</div>
+      </div>
+
+      <div class="bubble bubble-system">
+        alice → /run B · 4-window cross-val · ожидайте ~2m
+      </div>
+
+      <div class="bubble bubble-ai">
+        <div class="bubble-head">
+          <span class="avatar"></span>
+          <span class="who">analyst-agent</span>
+          <span class="ts">только что</span>
+        </div>
+        <div class="body">
+          Готово. Метрики B:
+
+          <div class="result-card">
+            <div class="title">B · fast=8/slow=50/H1 · 2023-01 → 2025-01</div>
+            <div class="result-row">
+              <span><span class="label">Sharpe</span> <span class="value">2.14</span></span>
+              <span><span class="label">DSR</span> <span class="value">0.97</span></span>
+              <span><span class="label">PBO</span> <span class="value">0.24</span></span>
+              <span><span class="label">MaxDD</span> <span class="value">-8.9%</span></span>
+            </div>
+          </div>
+
+          <div class="result-card">
+            <div class="title">Cross-val · 4 windows</div>
+            <div class="result-row">
+              <span><span class="label">2023-Q1 → Q4</span> <span class="value">2.31</span></span>
+              <span><span class="label">2023-Q3 → 2024-Q2</span> <span class="value">2.07</span></span>
+              <span><span class="label">2024-Q1 → Q4</span> <span class="value">2.18</span></span>
+              <span><span class="label">2024-Q3 → 2025-Q1</span> <span class="value">2.05</span></span>
+            </div>
+          </div>
+
+          Вердикт: 4/4 stable, PBO 0.24 &lt; 0.30. можно /approve.
+        </div>
+      </div>
+
+      <div class="bubble bubble-user">
+        <div class="bubble-head">
+          <span class="avatar">a</span>
+          <span class="who">alice</span>
+          <span class="ts">только что</span>
+        </div>
+        <div class="body">/approve</div>
+      </div>
+
+      <div class="bubble bubble-system">
+        alice approved · status: screening → approved · hypothesis_event создан
+      </div>
+
+      <div class="bubble bubble-ai">
+        <div class="bubble-head">
+          <span class="avatar"></span>
+          <span class="who">writer-agent</span>
+          <span class="ts">только что</span>
+        </div>
+        <div class="body">
+          Теперь я. Финальный отчёт в /explore/{{HYP_ID}}/report.
+          <br><br>
+          Открой <a href="/explore/{{HYP_ID}}/graphs" style="color: var(--accent);">/graphs/full</a>
+          для визуализации. Что дальше — /edit, /archive, или /run new?
+        </div>
+      </div>
+
+      <div class="action-cue">
+        approved · /edit · /archive · /run new · /reject (только до approved)
+      </div>
+
+    </div>
+
+    <div class="composer">
+      <div class="composer-wrap">
+        <textarea class="composer-input" rows="1"
+          placeholder="Скажи что-нибудь — current agent ответит. /approve · /reject · /run · /edit · /archive · /help"></textarea>
+        <div class="composer-hint">
+          <span><span class="slash">/approve</span> · <span class="slash">/reject</span> · <span class="slash">/run</span> · <span class="slash">/edit</span></span>
+          <span><span class="slash">/archive</span> · <span class="slash">/help</span></span>
+          <span style="margin-left: auto;">
+            <span class="composer-kbd">Cmd+Enter</span> · Enter — send
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div data-pane="history" class="tab-pane">
+
+  <div class="timeline">
+
+    <div class="day-divider">Today · 2026-08-01</div>
+
+    <div class="event event-edit">
+      <div class="ts">09:14</div>
+      <span class="event-icon"></span>
+      <span class="who">alice</span>
+      <span class="what">edit &amp; re-run ·
+        <span class="diff">{fast:5→8, slow:50→55}</span> →
+        Sharpe <span class="num up">1.92</span> · DSR 0.94 · PBO 0.32</span>
+    </div>
+
+    <div class="event event-ai">
+      <div class="ts">08:12</div>
+      <span class="event-icon"></span>
+      <span class="who">alice → AI</span>
+      <span class="what">explain risk →
+        <span class="note">«PBO 0.32 на OOS говорит, что 68% выбранных
+        стратегий останутся в верхней половине. Слабое место: не
+        проверялось на боковике 2022.»</span></span>
+    </div>
+
+    <div class="day-divider">Yesterday · 2026-07-31</div>
+
+    <div class="event event-comment">
+      <div class="ts">22:18</div>
+      <span class="event-icon"></span>
+      <span class="who">bob</span>
+      <span class="what">comment →
+        <span class="note">«стабильно в боковике, проверить на 4ч»</span></span>
+    </div>
+
+    <div class="event event-rerun">
+      <div class="ts">16:34</div>
+      <span class="event-icon">&#x27F3;</span>
+      <span class="who">alice</span>
+      <span class="what">re-run (смена timeframe H1) →
+        Sharpe <span class="num down">0.81</span> · DSR 0.62 → вернул D1</span>
+    </div>
+
+    <div class="day-divider">3 days ago · 2026-07-29</div>
+
+    <div class="event event-rerun">
+      <div class="ts">14:23</div>
+      <span class="event-icon">&#x27F3;</span>
+      <span class="who">alice</span>
+      <span class="what">re-run →
+        Sharpe <span class="num up">1.85</span> · DSR <span class="up">0.96</span> · PBO 0.28</span>
+    </div>
+
+    <div class="event event-create">
+      <div class="ts">14:18</div>
+      <span class="event-icon">+</span>
+      <span class="who">alice</span>
+      <span class="what">created via batch
+        (cell #2 of 3) ·
+        <span class="diff">{family:momentum, ticker:SBER, fast:5, slow:50}</span></span>
+    </div>
+
+    <div class="event event-status">
+      <div class="ts">14:14</div>
+      <span class="event-icon">&#x2B34;</span>
+      <span class="who">system</span>
+      <span class="what">status auto →
+        <span class="target">idea → screening</span> (backtest Sharpe 1.85 &gt; 0)</span>
+    </div>
+
+    <div class="day-divider">12 days ago · 2026-07-20</div>
+
+    <div class="event event-status">
+      <div class="ts">11:00</div>
+      <span class="event-icon">&#x2B34;</span>
+      <span class="who">alice</span>
+      <span class="what">created via batch</span>
+    </div>
+
+  </div>
+
+  <div class="timeline-footer">
+    Showing 8 events · <a href="/explore/{{HYP_ID}}/activity">view all 17 in Activity feed →</a>
+  </div>
+
+</div>
+
+<div data-pane="graphs" class="tab-pane">
+
+  <div class="graph-card">
+    <h4>Equity curve · strategy vs buy-and-hold</h4>
+    <div class="subtitle">Daily cumulative log-returns, period 2022-01-03 → 2024-12-30, 1420 bars</div>
+    <div class="chart">
+      <svg viewBox="0 0 800 200" preserveAspectRatio="none">
+        <path d="M0,180 L100,165 L200,150 L300,140 L400,135 L500,128 L600,122 L700,118 L800,114"
+              stroke="#8a93a3" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
+        <path d="M0,180 L60,170 L120,155 L180,148 L240,135 L300,115 L360,98 L420,82 L480,65 L540,52 L600,42 L660,32 L720,22 L780,15"
+              stroke="#7cb7ff" stroke-width="2.5" fill="none"/>
+      </svg>
+    </div>
+    <div class="chart-legend">
+      <span><span class="legend-dot" style="background: #7cb7ff;"></span>Strategy (Sharpe 1.92)</span>
+      <span><span class="legend-dot" style="background: #8a93a3;"></span>Buy &amp; hold SBER</span>
+    </div>
+  </div>
+
+  <div class="graph-card">
+    <h4>Drawdown</h4>
+    <div class="subtitle">Underwater curve (running max minus current equity)</div>
+    <div class="chart">
+      <svg viewBox="0 0 800 200" preserveAspectRatio="none">
+        <line x1="0" y1="20" x2="800" y2="20" stroke="#2f343c" stroke-width="1" stroke-dasharray="2,4"/>
+        <path d="M0,20 L100,22 L200,30 L300,28 L400,45 L500,40 L600,80 L700,75 L800,82"
+              stroke="#ff6b6b" stroke-width="2" fill="none"/>
+        <text x="610" y="92" fill="#ff6b6b" font-size="11">max -11.4%</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="graph-card">
+    <h4>Stability · 4-window cross-validation</h4>
+    <div class="subtitle">Каждое окно = 12 месяцев. Пересекающиеся по 6 мес. Проверяет устойчивость Sharpe вне выборки in-sample fit.</div>
+    <div class="stability">
+      <div class="window ok">
+        <span class="period">2022-01 → 2022-12</span>
+        <span>Sharpe 1.62 · DSR 0.91</span>
+        <span class="verdict-ok">pass</span>
+      </div>
+      <div class="window ok">
+        <span class="period">2022-07 → 2023-06</span>
+        <span>Sharpe 1.95 · DSR 0.96</span>
+        <span class="verdict-ok">pass</span>
+      </div>
+      <div class="window ok">
+        <span class="period">2023-01 → 2023-12</span>
+        <span>Sharpe 1.78 · DSR 0.93</span>
+        <span class="verdict-ok">pass</span>
+      </div>
+      <div class="window ok">
+        <span class="period">2023-07 → 2024-06</span>
+        <span>Sharpe 2.05 · DSR 0.98</span>
+        <span class="verdict-ok">pass</span>
+      </div>
+      <div class="score">
+        Score: 4/4 stable
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</div>
+
+<script>
+(function() {
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab-pane').forEach(function(pane) {
+      pane.classList.toggle('active', pane.getAttribute('data-pane') === name);
+    });
+    document.querySelectorAll('.tabs-row button[data-tab]').forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-tab') === name);
+    });
+  }
+
+  document.querySelectorAll('.tabs-row button[data-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var tab = this.getAttribute('data-tab');
+      switchTab(tab);
+    });
+  });
+
+})();
+</script>
+
+</body>
+</html>
