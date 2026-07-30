@@ -104,6 +104,7 @@ class TestVectorBTScreener:
         _active_credentials.reset(saved_token)
         # После reset() значение будет default (None)
         assert _active_credentials.get() is None
+        monkeypatch.delenv("INVEST_TOKEN", raising=False)
 
         from aqr.screener import screen_momentum
         with pytest.raises(RuntimeError, match="credentials"):

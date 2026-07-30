@@ -58,6 +58,9 @@ def fake_litellm(monkeypatch):
 class TestPlannerRequiresCredentials:
     async def test_raises_without_credentials(self, monkeypatch):
         """Без active credentials → RuntimeError."""
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from aqr.graph.context import current_credentials
 
         assert current_credentials() is None
@@ -70,6 +73,9 @@ class TestPlannerRequiresCredentials:
 class TestNarratorRequiresCredentials:
     async def test_raises_without_credentials(self, monkeypatch):
         """Narrator без credentials → raise."""
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from aqr.graph.context import current_credentials
 
         assert current_credentials() is None

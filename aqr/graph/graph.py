@@ -337,6 +337,10 @@ async def _llm_route(state: AgentState) -> str:
     Используется после первого ответа для обработки follow-up вопросов.
     Возвращает узел для следующего шага.
     """
+    # Если пайплайн завершён — не вызываем LLM, сразу END
+    if state.get("step") == "done":
+        return END
+
     # Если нет LLM — детерминистический роутер.
     # Проверяем и env, и per-session credentials (ContextVar) для WS-режима.
     if not _has_llm_key():

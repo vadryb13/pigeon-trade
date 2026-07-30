@@ -23,9 +23,9 @@ def required_env(monkeypatch):
 
 class TestEnvChecks:
     async def test_missing_database_url_raises(self, monkeypatch):
+        from aqr.startup import validate_runtime
         monkeypatch.delenv("DATABASE_URL", raising=False)
         monkeypatch.setenv("AQR_SESSION_SECRET", "x" * 32)
-        from aqr.startup import validate_runtime
 
         with pytest.raises(RuntimeError, match="DATABASE_URL is required"):
             await validate_runtime()

@@ -109,6 +109,9 @@ def _install_fake_litellm(monkeypatch, response_content: str) -> AsyncMock:
 
 async def test_reviewer_raises_without_credentials(monkeypatch):
     """Без active credentials в ContextVar → RuntimeError."""
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     from aqr.graph.context import current_credentials
 
     assert current_credentials() is None

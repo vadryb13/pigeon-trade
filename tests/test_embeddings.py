@@ -86,8 +86,11 @@ def with_credentials():
 
 
 class TestEmbedderRequiresKey:
-    async def test_raises_without_api_key_and_without_credentials(self):
+    async def test_raises_without_api_key_and_without_credentials(self, monkeypatch):
         """Без api_key параметром и без ContextVar → RuntimeError при embed()."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         from aqr.registry.embeddings import Embedder
 
         embedder = Embedder()
