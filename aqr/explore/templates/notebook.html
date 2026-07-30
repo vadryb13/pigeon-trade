@@ -91,7 +91,7 @@
 
   .lock-banner {
     margin: 16px 32px 0;
-    display: flex; align-items: center; gap: 12px;
+    display: none; align-items: center; gap: 12px;
     background: rgba(255, 212, 59, 0.08); border: 1px solid var(--yellow);
     border-radius: 6px; padding: 10px 14px; font-size: 13px; color: var(--yellow);
   }
@@ -100,6 +100,8 @@
     background: transparent; padding: 4px 12px; font-size: 12px;
     color: var(--yellow); border-color: var(--yellow);
   }
+  .lock-banner.active { display: flex; }
+  .lock-indicator { font-size: 11px; color: var(--yellow); margin-left: 8px; }
 
   .tabs-row {
     display: flex; gap: 2px; align-items: stretch;
@@ -422,8 +424,8 @@
     </div>
   </div>
   <div class="presence-indicator">
-    <span><span class="dot"></span> alice online</span>
-    <span><span class="dot yellow"></span> bob online · viewing this</span>
+    <div id="who-is-here" style="font-size:12px;color:var(--muted);"></div>
+    <span id="lock-indicator" class="lock-indicator" style="display:none;">locked by you</span>
   </div>
 </div>
 
@@ -438,13 +440,7 @@
   </div>
 </div>
 
-<div class="lock-banner">
-  <strong>alice is editing this hypothesis.</strong>
-  Auto-release in <strong>4:32</strong> if idle.
-  <span style="margin-left: auto;">
-    <button class="btn">Notify when free</button>
-  </span>
-</div>
+<div id="lock-banner" class="lock-banner"></div>
 
 <div class="tabs-row">
   <button class="active" data-tab="workspace">
@@ -778,6 +774,87 @@
 
 <script>
 (function() {
+  var urlParams = new URLSearchParams(window.location.search);
+  var sessionId = urlParams.get('session') || 'user-' + Math.random().toString(36).slice(2, 8);
+  var username = urlParams.get('user') || sessionId;
+  var hypId = '{{HYP_ID}}';
+
+  var myLock = false;
+
+  var evtSource = new EventSource('/api/explore/events');
+  evtSource.onmessage = function(e) {
+    handleSSEMsg(JSON.parse(e.data));
+  };
+
+  function handleSSEMsg(msg) {
+    if (msg.type === 'presence' && msg.sessions) {
+      var here = document.getElementById('who-is-here');
+      if (!here) return;
+      var viewing = msg.sessions.filter(function(s) { return s.hyp_id === hypId; });
+      var others = viewing.map(function(s) { return s.name; }).filter(function(n) { return n !== username; });
+      here.textContent = others.length > 0 ? others.join(', ') + ' viewing this' : '';
+    } else if (msg.type === 'lock' && msg.hyp_id === hypId) {
+      var banner = document.getElementById('lock-banner');
+      if (banner) {
+        banner.innerHTML = '<strong>' + msg.name + '</strong> is editing this hypothesis. Auto-release in <strong>' + (msg.ttl || '?') + '</strong> if idle.';
+        banner.classList.add('active');
+      }
+    } else if (msg.type === 'unlock' && msg.hyp_id === hypId) {
+      var banner = document.getElementById('lock-banner');
+      if (banner) {
+        banner.classList.remove('active');
+        banner.innerHTML = '';
+      }
+    }
+  }
+
+  function acquireLockFn() {
+    fetch('/api/explore/hypotheses/' + hypId + '/lock', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: sessionId, name: username})
+    });
+    myLock = true;
+    var ind = document.getElementById('lock-indicator');
+    if (ind) ind.style.display = 'inline';
+  }
+
+  function releaseLockFn() {
+    fetch('/api/explore/hypotheses/' + hypId + '/unlock', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: sessionId, name: username})
+    });
+    myLock = false;
+    var ind = document.getElementById('lock-indicator');
+    if (ind) ind.style.display = 'none';
+  }
+
+  setInterval(function() {
+    fetch('/api/explore/presence', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: sessionId, name: username, hyp_id: hypId})
+    });
+  }, 30000);
+
+  document.addEventListener('click', function(e) {
+    var target = e.target;
+    if (target.matches('[contenteditable]') || target.matches('.editable') || target.closest('[data-lock]')) {
+      if (!myLock) acquireLockFn();
+    }
+  });
+
+  window.addEventListener('beforeunload', function() {
+    if (myLock) releaseLockFn();
+  });
+
+  var textarea = document.querySelector('.composer-input');
+  if (textarea) {
+    textarea.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+        var val = this.value.trim();
+        if (val.startsWith('/edit') && !myLock) acquireLockFn();
+      }
+    });
+  }
 
   function switchTab(name) {
     document.querySelectorAll('.tab-pane').forEach(function(pane) {
@@ -790,8 +867,7 @@
 
   document.querySelectorAll('.tabs-row button[data-tab]').forEach(function(btn) {
     btn.addEventListener('click', function() {
-      var tab = this.getAttribute('data-tab');
-      switchTab(tab);
+      switchTab(this.getAttribute('data-tab'));
     });
   });
 

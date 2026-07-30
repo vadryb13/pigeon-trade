@@ -28,6 +28,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from aqr import __version__
 from aqr.api.routes import router as v04_router
@@ -115,3 +116,8 @@ async def health_ready(response: Response) -> dict:
     except RuntimeError:
         response.status_code = 503
         return {"status": "degraded", "error": "runtime validation failed"}
+
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/explore")

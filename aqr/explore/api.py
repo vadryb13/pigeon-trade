@@ -1,11 +1,12 @@
-"""Explore API — REST endpoints for dynamic explore data."""
+"""Explore API — REST endpoints for dynamic explore data + SSE + lock."""
 from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 
+from aqr.explore.presence import TRACKER
 from aqr.registry.store import RegistryStore
 from aqr.session import async_session_factory
 
@@ -87,3 +88,45 @@ async def activity_feed(days: int = 7):
         return {"events": e}
     except Exception:
         return {"events": []}
+
+
+# ── Presence + Lock (SSE + REST) ────────────────────────────────
+
+@router.get("/events")
+async def explore_events(request: Request):
+    """SSE-поток: присутствие + блокировки."""
+    TRACKER.start()
+    return StreamingResponse(TRACKER.subscribe(), media_type="text/event-stream")
+
+
+@router.post("/presence")
+async def presence_heartbeat(body: dict):
+    """Heartbeat: клиент сообщает что он жив и смотрит."""
+    session_id = body.get("session_id", "anon")
+    name = body.get("name", session_id)
+    hyp_id = body.get("hyp_id")
+    await TRACKER.heartbeat(session_id, name, hyp_id)
+    return {"ok": True}
+
+
+@router.post("/hypotheses/{hyp_id}/lock")
+async def lock_hypothesis(hyp_id: str, body: dict):
+    """Заблокировать гипотезу для редактирования."""
+    result = await TRACKER.lock(
+        hyp_id=hyp_id,
+        session_id=body.get("session_id", "anon"),
+        name=body.get("name", body.get("session_id", "anon")),
+    )
+    if not result.get("ok"):
+        return JSONResponse(status_code=409, content=result)
+    return result
+
+
+@router.post("/hypotheses/{hyp_id}/unlock")
+async def unlock_hypothesis(hyp_id: str, body: dict):
+    """Снять блокировку."""
+    result = await TRACKER.unlock(
+        hyp_id=hyp_id,
+        session_id=body.get("session_id", "anon"),
+    )
+    return result

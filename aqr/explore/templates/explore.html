@@ -181,7 +181,9 @@ tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--accent-bg); }
 tbody tr:nth-child(even) { background: var(--row-alt); }
 tbody tr:nth-child(even):hover { background: var(--accent-bg); }
-tbody tr.locked { opacity: 0.55; }
+tbody tr.locked { opacity: 0.6; }
+tbody tr.locked input[type="checkbox"] { opacity: 0.4; }
+.lock-badge { display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;background:var(--yellow-bg);color:var(--yellow); }
 .id { font-family: ui-monospace, "SF Mono", monospace; color: var(--muted); font-size: 12px; }
 .name { color: var(--accent); font-weight: 500; }
 .sh { color: var(--text); font-variant-numeric: tabular-nums; }
@@ -273,6 +275,7 @@ tbody tr.locked { opacity: 0.55; }
   <span>Win rate <strong id="stat-winrate">—</strong> (<span id="stat-approved">—</span> approved / <span id="stat-total">—</span> total)</span>
   <span id="stat-last-activity"></span>
   <span class="chip" id="stat-runs-today"></span>
+  <div id="presence-bar" style="display:inline-flex;gap:12px;margin-left:auto;font-size:12px;color:var(--muted);"></div>
 </div>
 
 <!-- Spreadsheet View -->
@@ -379,6 +382,9 @@ tbody tr.locked { opacity: 0.55; }
 (function() {
   // ––– State –––
   let allHypotheses = [];
+  const urlParams = new URLSearchParams(window.location.search);
+  const sessionId = urlParams.get('session') || 'user-' + Math.random().toString(36).slice(2, 8);
+  const username = urlParams.get('user') || sessionId;
 
   // ––– Tab switching –––
   const tabs = document.querySelectorAll('#tabs .tab[data-view]');
@@ -724,6 +730,48 @@ tbody tr.locked { opacity: 0.55; }
     });
   }
 
+  // ––– SSE + Presence + Lock –––
+  function handleSSEMessage(data) {
+    if (data.type === 'presence' && data.sessions) {
+      const bar = document.getElementById('presence-bar');
+      if (!bar) return;
+      bar.innerHTML = data.sessions.map(s =>
+        '<span><span class="presence-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:4px;"></span>' + s.name + '</span>'
+      ).join('');
+    } else if (data.type === 'lock') {
+      const row = document.querySelector('tr[data-id="' + data.hyp_id + '"]');
+      if (row) {
+        row.classList.add('locked');
+        const nameCell = row.querySelector('.name');
+        if (nameCell && !nameCell.querySelector('.lock-badge')) {
+          const badge = document.createElement('span');
+          badge.className = 'lock-badge';
+          badge.textContent = 'editing';
+          nameCell.appendChild(document.createTextNode(' '));
+          nameCell.appendChild(badge);
+        }
+      }
+    } else if (data.type === 'unlock') {
+      const row = document.querySelector('tr[data-id="' + data.hyp_id + '"]');
+      if (row) {
+        row.classList.remove('locked');
+        const badge = row.querySelector('.lock-badge');
+        if (badge) badge.remove();
+      }
+    } else if (data.type === 'locked_ids' && data.ids) {
+      document.querySelectorAll('#table-body tr').forEach(tr => {
+        const id = tr.getAttribute('data-id');
+        if (data.ids.includes(id)) {
+          tr.classList.add('locked');
+        } else {
+          tr.classList.remove('locked');
+          const badge = tr.querySelector('.lock-badge');
+          if (badge) badge.remove();
+        }
+      });
+    }
+  }
+
   // ––– Fetch + init –––
   async function init() {
     try {
@@ -757,9 +805,27 @@ tbody tr.locked { opacity: 0.55; }
     } catch (e) {
       // activity stays empty
     }
+
+    try {
+      const evtSource = new EventSource('/api/explore/events');
+      evtSource.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        handleSSEMessage(data);
+      };
+    } catch (e) {
+      // SSE not available
+    }
   }
 
   init();
+
+  setInterval(() => {
+    fetch('/api/explore/presence', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: sessionId, name: username, hyp_id: null})
+    }).catch(() => {});
+  }, 30000);
 })();
 </script>
 
