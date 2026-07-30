@@ -228,15 +228,37 @@ tbody tr.locked { opacity: 0.55; }
 .activity-body .desc a { color: var(--accent); text-decoration: none; }
 .activity-body .desc a:hover { text-decoration: underline; }
 .activity-body .time { color: var(--subtle); font-size: 11px; margin-top: 2px; }
+
+/* By ticker view */
+.ticker-groups { margin: 16px 24px; }
+.ticker-group { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.ticker-header { display: flex; align-items: center; gap: 16px; padding: 14px 18px; cursor: pointer; user-select: none; }
+.ticker-header:hover { background: var(--row-alt); }
+.ticker-name { font-size: 16px; font-weight: 600; min-width: 80px; }
+.ticker-summary { display: flex; gap: 8px; font-size: 13px; color: var(--muted); flex: 1; }
+.ticker-summary .sep { color: var(--border); }
+.ticker-summary strong { color: var(--text); font-weight: 500; }
+.ticker-toggle { color: var(--muted); font-size: 14px; transition: transform 0.2s; }
+.ticker-body { border-top: 1px solid var(--border); }
+.ticker-body.collapsed { display: none; }
+.ticker-row { display: grid; grid-template-columns: 60px 1fr 100px 80px 80px 80px; gap: 8px; align-items: center; padding: 10px 18px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border); }
+.ticker-row:last-child { border-bottom: 0; }
+.ticker-row:hover { background: var(--row-alt); }
+.ticker-row .id { font-family: ui-monospace, monospace; color: var(--muted); }
+.ticker-row .ticker-name-col { color: var(--accent); font-weight: 500; }
+.ticker-row .owner { color: var(--muted); font-size: 12px; }
+
 </style>
+
 </head>
 <body>
 
 <div class="topbar">
   <h1>AQR · Explore</h1>
   <div class="tabs" id="tabs">
-    <span class="tab active" data-view="spreadsheet">Spreadsheet</span>
+     <span class="tab active" data-view="spreadsheet">Spreadsheet</span>
     <span class="tab" data-view="activity">Activity</span>
+    <span class="tab" data-view="ticker">By ticker</span>
     <span class="tab tab-accent" data-view="new">+ New</span>
   </div>
 </div>
@@ -496,6 +518,129 @@ tbody tr.locked { opacity: 0.55; }
   </div>
 </div>
 
+<!-- By Ticker View -->
+<div class="view" id="view-ticker">
+  <div class="filterbar">
+    <span class="filterbar-label">Ticker:</span>
+    <span class="filter-pill active" data-filter="all">All</span>
+    <span class="filter-pill" data-filter="SBER">SBER</span>
+    <span class="filter-pill" data-filter="GAZP">GAZP</span>
+    <span class="filter-pill" data-filter="LKOH">LKOH</span>
+  </div>
+
+  <div class="ticker-groups">
+    <div class="ticker-group">
+      <div class="ticker-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+        <div class="ticker-name">SBER</div>
+        <div class="ticker-summary">
+          <span>15 hypotheses</span>
+          <span class="sep">·</span>
+          <span>avg Sharpe <strong>1.32</strong></span>
+          <span class="sep">·</span>
+          <span>best DSR <strong class="up">0.96</strong></span>
+        </div>
+        <div class="ticker-toggle">▾</div>
+      </div>
+      <div class="ticker-body">
+        <div class="ticker-rows">
+          <div class="ticker-row" onclick="location='/explore/42'">
+            <span class="id">#42</span>
+            <span class="ticker-name-col">SMA5/50 momentum</span>
+            <span class="tag tag-approved">approved</span>
+            <span class="sh-num up">0.96</span>
+            <span class="sh-num">1.85</span>
+            <span class="owner">alice</span>
+          </div>
+          <div class="ticker-row" onclick="location='/explore/29'">
+            <span class="id">#29</span>
+            <span class="ticker-name-col">Mom-divergence</span>
+            <span class="tag tag-validating">validating</span>
+            <span class="sh-num">—</span>
+            <span class="sh-num">?</span>
+            <span class="owner">alice</span>
+          </div>
+          <div class="ticker-row" onclick="location='/explore/20'">
+            <span class="id">#20</span>
+            <span class="ticker-name-col">Z-score mean-reversion</span>
+            <span class="tag tag-approved">approved</span>
+            <span class="sh-num up">0.89</span>
+            <span class="sh-num">1.42</span>
+            <span class="owner">alice</span>
+          </div>
+          <div class="ticker-row" onclick="location='/explore/51'">
+            <span class="id">#51</span>
+            <span class="ticker-name-col">Donchian 20/55</span>
+            <span class="tag tag-idea">idea</span>
+            <span class="sh-num">—</span>
+            <span class="sh-num">—</span>
+            <span class="owner">alice</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ticker-group">
+      <div class="ticker-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+        <div class="ticker-name">GAZP</div>
+        <div class="ticker-summary">
+          <span>10 hypotheses</span>
+          <span class="sep">·</span>
+          <span>avg Sharpe <strong>0.78</strong></span>
+          <span class="sep">·</span>
+          <span>best DSR <strong class="up">0.71</strong></span>
+        </div>
+        <div class="ticker-toggle">▾</div>
+      </div>
+      <div class="ticker-body">
+        <div class="ticker-rows">
+          <div class="ticker-row" onclick="location='/explore/38'">
+            <span class="id">#38</span>
+            <span class="ticker-name-col">RSI(14)+ATR</span>
+            <span class="tag tag-screening">screening</span>
+            <span class="sh-num">0.71</span>
+            <span class="sh-num">1.10</span>
+            <span class="owner">bob</span>
+          </div>
+          <div class="ticker-row" onclick="location='/explore/51'">
+            <span class="id">#51</span>
+            <span class="ticker-name-col">Donchian 20/55</span>
+            <span class="tag tag-idea">idea</span>
+            <span class="sh-num">—</span>
+            <span class="sh-num">—</span>
+            <span class="owner">alice</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ticker-group">
+      <div class="ticker-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+        <div class="ticker-name">LKOH</div>
+        <div class="ticker-summary">
+          <span>6 hypotheses</span>
+          <span class="sep">·</span>
+          <span>avg Sharpe <strong>0.41</strong></span>
+          <span class="sep">·</span>
+          <span>best DSR <strong class="down">0.12</strong></span>
+        </div>
+        <div class="ticker-toggle">▾</div>
+      </div>
+      <div class="ticker-body">
+        <div class="ticker-rows">
+          <div class="ticker-row" onclick="location='/explore/35'">
+            <span class="id">#35</span>
+            <span class="ticker-name-col">BBands breakout</span>
+            <span class="tag tag-rejected">rejected</span>
+            <span class="sh-num down">0.12</span>
+            <span class="sh-num down">-0.30</span>
+            <span class="owner">alice</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 (function() {
   // Tab switching
@@ -503,6 +648,8 @@ tbody tr.locked { opacity: 0.55; }
   const views = {
     spreadsheet: document.getElementById('view-spreadsheet'),
     activity: document.getElementById('view-activity'),
+    ticker: document.getElementById('view-ticker'),
+    new: document.getElementById('view-empty'),
   };
 
   function switchTab(name) {
