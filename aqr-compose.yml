@@ -14,5 +14,21 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
+
+  app:
+    build: .
+    container_name: aqr-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - aqr-cache:/root/.aqr
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   aqr-pg-data:
+  aqr-cache:
