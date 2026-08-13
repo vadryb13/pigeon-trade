@@ -117,6 +117,22 @@ class TestExecuteWithSlippage:
         assert isinstance(r1, type(r2))
 
     @pytest.mark.asyncio
+    async def test_execution_costs_reduce_returns(self, with_credentials):
+        """Комиссия и slippage влияют на итоговые доходности."""
+        from aqr.executor.nautilus import execute_with_slippage
+
+        no_cost = await execute_with_slippage(
+            hypothesis=_make_hypothesis(), prices=_make_prices(),
+            commission_pct=0.0, slippage_ticks=0,
+        )
+        with_cost = await execute_with_slippage(
+            hypothesis=_make_hypothesis(), prices=_make_prices(),
+            commission_pct=0.01, slippage_ticks=10,
+        )
+
+        assert sum(with_cost.daily_returns) < sum(no_cost.daily_returns)
+
+    @pytest.mark.asyncio
     async def test_nautilus_path_called_when_available(self, with_credentials, monkeypatch):
         """When nautilus_trader is importable, the engine path is taken."""
         from aqr.executor import nautilus as nautilus_mod

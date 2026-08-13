@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -18,6 +19,20 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+# DuckDB rejects concurrent connections to one file when their configuration
+# differs (read-only versus read-write). The application cache is process-local,
+# therefore a re-entrant process lock makes every schema/read/write operation
+# atomic while preserving the synchronous cache API used via asyncio.to_thread.
+_DUCKDB_LOCK = threading.RLock()
+
+
+def _synchronized(method):
+    def wrapped(*args, **kwargs):
+        with _DUCKDB_LOCK:
+            return method(*args, **kwargs)
+
+    return wrapped
 
 
 def _safe_float(value: Any) -> float | None:
@@ -78,6 +93,7 @@ class OhlcvCache:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialized = False
 
+    @_synchronized
     def _ensure_schema(self) -> None:
         """Инициализация схемы (один раз за инстанс)."""
         if self._initialized:
@@ -87,6 +103,7 @@ class OhlcvCache:
             conn.execute(SCHEMA_SQL)
         self._initialized = True
 
+    @_synchronized
     def get_cached(
         self,
         ticker: str,
@@ -127,6 +144,7 @@ class OhlcvCache:
         df = df.set_index("begin").sort_index()
         return df
 
+    @_synchronized
     def put_cache(
         self,
         ticker: str,
@@ -211,6 +229,7 @@ class OhlcvCache:
             )
         return len(rows)
 
+    @_synchronized
     def invalidate(self, ticker: str | None = None) -> int:
         """Очистить кэш: по тикеру (если задан) или целиком.
 
@@ -233,6 +252,7 @@ class OhlcvCache:
                 conn.execute("DELETE FROM ohlcv WHERE ticker = ?", [ticker])
         return count
 
+    @_synchronized
     def stats(self) -> dict[str, int]:
         """Сводка по кэшу: количество тикеров и строк."""
         self._ensure_schema()

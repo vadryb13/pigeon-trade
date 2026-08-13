@@ -2,7 +2,7 @@
 
 Endpoints:
 - GET  /chat                          — HTML-страница чата
-- GET  /chat/new?session_id=...       — HMAC-токен для новой сессии
+- POST /chat/new                      — новая серверная сессия + HMAC-токен для WS
 - GET  /chat/{token}/settings         — HTML-форма настроек (credentials)
 - POST /chat/{token}/settings         — сохранение credentials в session_settings
 - GET  /chat/{token}/settings/status  — JSON {configured: bool, llm_model?: str}
@@ -19,11 +19,11 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from aqr.auth import sign_session, verify_token_async
+from aqr.auth import SESSION_COOKIE, new_session_id, sign_session, verify_token_async
 from aqr.registry import RegistryStore
 from aqr.session import async_session_factory
 
@@ -143,13 +143,25 @@ async def chat_page() -> HTMLResponse:
 # ── /chat/new (token issuance) ──────────────────────────────────
 
 
-@router.get("/chat/new")
+@router.post("/chat/new")
 async def chat_new(
-    session_id: str = Query(..., min_length=1, max_length=64),
 ) -> JSONResponse:
-    """Выпустить HMAC-токен для новой сессии."""
+    """Создать новую непрозрачную сессию и выдать HMAC-токен для WS."""
+    session_id = new_session_id()
     token = sign_session(session_id)
-    return JSONResponse({"session_id": session_id, "token": token})
+    async with async_session_factory() as db:
+        await RegistryStore(db).get_or_create_session(session_id)
+        await db.commit()
+    response = JSONResponse({"session_id": session_id, "token": token})
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        httponly=True,
+        secure=os.getenv("AQR_COOKIE_SECURE", "1").lower() not in {"0", "false", "no"},
+        samesite="lax",
+        max_age=60 * 60 * 24 * 30,
+    )
+    return response
 
 
 # ── /chat/{token}/settings (form + save) ────────────────────────

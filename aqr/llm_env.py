@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from aqr.registry import DecryptedSettings
 
+
+_logger = logging.getLogger(__name__)
 
 # Какие env-переменные пробрасываем
 _LLM_ENV_KEYS = (
@@ -33,6 +36,13 @@ _LLM_ENV_KEYS = (
     "GEMINI_API_KEY",
 )
 
+# Ключи для fallback-поиска API-ключа из env
+_API_KEY_ENV_KEYS = (
+    "DEEPSEEK_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GIGACHAT_CREDENTIALS",
+)
 
 # Единый asyncio-лок для сериализации env-override при параллельных LLM-вызовах.
 # Защищает от race в `finally` при concurrent `asyncio.gather` (B4).
@@ -49,6 +59,64 @@ _PROVIDER_ENV_MAP: list[tuple[str, str]] = [
     ("deepseek", "DEEPSEEK_API_KEY"),
     ("gemini", "GEMINI_API_KEY"),
 ]
+
+
+def resolve_llm_credentials(model: str | None = None, caller: str = "") -> DecryptedSettings:
+    """Получить credentials сессии или собрать из env (REST-путь).
+
+    Пробует `current_credentials()` (per-session ContextVar), при None —
+    собирает `DecryptedSettings` из env-переменных.
+    Без модели + API-ключа — RuntimeError.
+
+    Вызов safe вне WS-сессии (REST-ручки), т.к. импорт `current_credentials`
+    ленивый внутри функции.
+    """
+    from aqr.graph.context import current_credentials
+    from aqr.registry.store import DecryptedSettings
+
+    creds = current_credentials()
+    if creds is not None:
+        return creds
+
+    model = model or os.environ.get("AQR_LLM_MODEL", "")
+    api_key = ""
+    for k in _API_KEY_ENV_KEYS:
+        api_key = os.environ.get(k, "")
+        if api_key:
+            break
+
+    if not model or not api_key:
+        raise RuntimeError(
+            f"{caller or 'LLM call'}: no credentials available. "
+            "Either configure via /chat/{token}/settings or set "
+            "AQR_LLM_MODEL + one of DEEPSEEK_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY env vars."
+        )
+    return DecryptedSettings(
+        session_id="rest",
+        llm_model=model,
+        llm_api_key=api_key,
+        openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
+        invest_token=os.environ.get("INVEST_TOKEN", ""),
+        invest_sandbox=os.environ.get("INVEST_SANDBOX", "1") != "0",
+    )
+
+
+def strip_markdown_fence(content: str) -> str:
+    """Убрать markdown code fence (```json ... ```) из LLM-ответа.
+
+    Возвращает содержимое без обрамляющих ```-строк.
+    Если fence отсутствует — возвращает content как есть.
+    Обрезает ```-строки только если они на отдельных строках (multiline fence).
+    """
+    content = content.strip()
+    if not content.startswith("```"):
+        return content
+    lines = content.split("\n")
+    if len(lines) >= 2 and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines)
 
 
 @contextlib.contextmanager

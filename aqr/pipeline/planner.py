@@ -65,38 +65,9 @@ class ResearchPlanner:
 
     async def _llm_plan(self, user_goal: str) -> ResearchPlan:
         """Зовёт LLM с credentials активной сессии. Raise на любой ошибке."""
-        from ..graph.context import current_credentials
+        from ..llm_env import acquire_llm_env_lock, resolve_llm_credentials, strip_markdown_fence
 
-        creds = current_credentials()
-        if creds is None:
-            # REST-путь (без WS-сессии): собираем credentials из env.
-            from ..registry.store import DecryptedSettings
-            model = self.model or os.environ.get("AQR_LLM_MODEL", "")
-            api_key = (
-                os.environ.get("DEEPSEEK_API_KEY")
-                or os.environ.get("ANTHROPIC_API_KEY")
-                or os.environ.get("OPENAI_API_KEY")
-                or os.environ.get("GIGACHAT_CREDENTIALS")
-                or ""
-            )
-            if not model or not api_key:
-                raise RuntimeError(
-                    "ResearchPlanner.plan: no credentials available. "
-                    "Either configure via /chat/{token}/settings or set "
-                    "AQR_LLM_MODEL + one of DEEPSEEK_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY env vars."
-                )
-            creds = DecryptedSettings(
-                session_id="rest",
-                llm_model=model,
-                llm_api_key=api_key,
-                openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
-                invest_token=os.environ.get("INVEST_TOKEN", ""),
-                invest_sandbox=os.environ.get("INVEST_SANDBOX", "1") != "0",
-            )
-
-        # Сериализуем env-override через asyncio.Lock — иначе concurrent
-        # asyncio.gather-вызовы портят env друг другу в `finally` (B4).
-        from ..llm_env import acquire_llm_env_lock
+        creds = resolve_llm_credentials(self.model, "ResearchPlanner.plan")
 
         async with await acquire_llm_env_lock() as make_env:
             with make_env(creds):
@@ -115,15 +86,7 @@ class ResearchPlanner:
         content = resp.choices[0].message.content
         if not content:
             raise RuntimeError("LLM returned empty content for plan_research")
-        # Strip markdown code fences if present
-        content = content.strip()
-        if content.startswith("```"):
-            lines = content.split("\n")
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            content = "\n".join(lines)
+        content = strip_markdown_fence(content)
         try:
             data = json.loads(content)
         except json.JSONDecodeError as e:
@@ -137,8 +100,8 @@ class ResearchPlanner:
             goal=goal,
             tickers=data.get("tickers") or ["SBER", "GAZP", "LKOH"],
             timeframe=data.get("timeframe", "D1"),
-            start_date=data.get("start_date", "2023-01-01"),
-            end_date=data.get("end_date", "2024-12-31"),
+            start_date=data.get("start_date") or "2023-01-01",
+            end_date=data.get("end_date") or "2024-12-31",
             hypothesis_families=data.get("hypothesis_families")
                 or ["momentum", "mean_reversion"],
             n_hypotheses=int(data.get("n_hypotheses", 20)),

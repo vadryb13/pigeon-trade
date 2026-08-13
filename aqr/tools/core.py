@@ -27,6 +27,31 @@ logger = logging.getLogger(__name__)
 # 100 баров = ~4.5 месяца дневных данных; ниже — слишком короткий ряд для DSR/CPCV.
 MIN_CACHED_ROWS = 100
 
+
+def _dicts_to_backtest_results(results: list[dict[str, Any]]) -> list[BacktestResult]:
+    """Собрать BacktestResult из словарей (используется review_insights и narrate)."""
+    top_br: list[BacktestResult] = []
+    for r in results:
+        spec = HypothesisSpec(
+            name=r.get("name", "?"),
+            family=r.get("family", "?"),
+            ticker=r.get("ticker", "?"),
+            params=r.get("params", {}),
+            fn=lambda x: x,
+        )
+        top_br.append(BacktestResult(
+            hypothesis=spec,
+            sharpe=r.get("sharpe", 0),
+            dsr=r.get("dsr", 0),
+            dsr_verdict=r.get("dsr_verdict", "?"),
+            cpcv_mean_sharpe=r.get("cpcv_mean_sharpe", 0),
+            cpcv_std_sharpe=r.get("cpcv_std_sharpe", 0),
+            max_drawdown=r.get("max_drawdown", 0),
+            n_trades=r.get("n_trades", 0),
+            daily_returns=[],
+        ))
+    return top_br
+
 # ── plan_research ───────────────────────────────────────────────
 
 async def plan_research(goal: str) -> dict[str, Any]:
@@ -423,7 +448,6 @@ async def review_insights(
     """LLM-review топ-5 результатов: 0–3 дополнительных наблюдения."""
     from ..pipeline.reviewer import InsightReviewer
 
-    # Минимально восстанавливаем PipelineResult для reviewer
     plan = ResearchPlan(
         goal=goal,
         tickers=list({r.get("ticker", "") for r in top_results}),
@@ -431,26 +455,7 @@ async def review_insights(
         n_hypotheses=len(top_results),
     )
 
-    top_br = []
-    for r in top_results:
-        spec = HypothesisSpec(
-            name=r.get("name", "?"),
-            family=r.get("family", "?"),
-            ticker=r.get("ticker", "?"),
-            params=r.get("params", {}),
-            fn=lambda x: x,  # placeholder — не используется в review
-        )
-        top_br.append(BacktestResult(
-            hypothesis=spec,
-            sharpe=r.get("sharpe", 0),
-            dsr=r.get("dsr", 0),
-            dsr_verdict=r.get("dsr_verdict", "?"),
-            cpcv_mean_sharpe=r.get("cpcv_mean_sharpe", 0),
-            cpcv_std_sharpe=r.get("cpcv_std_sharpe", 0),
-            max_drawdown=r.get("max_drawdown", 0),
-            n_trades=r.get("n_trades", 0),
-            daily_returns=[],
-        ))
+    top_br = _dicts_to_backtest_results(top_results)
 
     result = PipelineResult(
         run_id="tool-review",
@@ -481,7 +486,6 @@ async def narrate(
     elapsed_seconds: float = 0.0,
 ) -> str:
     """Сгенерировать русский отчёт по результатам исследования."""
-    from ..pipeline.executor import BacktestResult
     from ..pipeline.narrator import Narrator
 
     plan = ResearchPlan(
@@ -491,26 +495,7 @@ async def narrate(
         n_hypotheses=n_tested,
     )
 
-    top_br = []
-    for r in (top_results or []):
-        spec = HypothesisSpec(
-            name=r.get("name", "?"),
-            family=r.get("family", "?"),
-            ticker=r.get("ticker", "?"),
-            params=r.get("params", {}),
-            fn=lambda x: x,
-        )
-        top_br.append(BacktestResult(
-            hypothesis=spec,
-            sharpe=r.get("sharpe", 0),
-            dsr=r.get("dsr", 0),
-            dsr_verdict=r.get("dsr_verdict", "?"),
-            cpcv_mean_sharpe=r.get("cpcv_mean_sharpe", 0),
-            cpcv_std_sharpe=r.get("cpcv_std_sharpe", 0),
-            max_drawdown=r.get("max_drawdown", 0),
-            n_trades=r.get("n_trades", 0),
-            daily_returns=[],
-        ))
+    top_br = _dicts_to_backtest_results(top_results or [])
 
     result = PipelineResult(
         run_id="tool-narrate",

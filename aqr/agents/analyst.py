@@ -149,8 +149,8 @@ class AnalystAgent(BaseAgent):
         """
         try:
             from aqr.screener.vectorbt import screen_momentum
-        except ImportError:
-            return []
+        except ImportError as exc:
+            raise RuntimeError("momentum screener dependency is not installed") from exc
 
         try:
             return await asyncio.to_thread(
@@ -160,9 +160,9 @@ class AnalystAgent(BaseAgent):
                 end_date=end_date,
                 top_n=20,
             )
-        except Exception:
+        except Exception as exc:
             self.logger.exception("screener failed for %s", ticker)
-            return []
+            raise RuntimeError(f"screener failed for {ticker}") from exc
 
     async def _default_specs(self, family: str) -> list[dict[str, Any]]:
         """Return one default-param spec for a family.
@@ -187,7 +187,7 @@ class AnalystAgent(BaseAgent):
         """Run backtest_one on a single parameter combo."""
         bt_tool = tool_registry.get("backtest_one")
         if bt_tool is None:
-            return None
+            raise RuntimeError("backtest_one tool not registered")
 
         hypothesis: dict[str, Any] = {
             "name": f"{family}_{ticker}",
@@ -205,8 +205,8 @@ class AnalystAgent(BaseAgent):
                 )
                 return None
             return result
-        except Exception:
+        except Exception as exc:
             self.logger.exception(
                 "backtest_one exception: %s/%s %s", ticker, family, params,
             )
-            return None
+            raise RuntimeError(f"backtest failed for {ticker}/{family}") from exc

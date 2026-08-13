@@ -22,6 +22,7 @@ Startup validation:
 """
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -79,8 +80,6 @@ app.add_middleware(
     allow_methods=[m.strip() for m in _ALLOWED_METHODS],
     allow_headers=["*"],
 )
-
-import logging
 
 _logger = logging.getLogger(__name__)
 if "*" in _origins:

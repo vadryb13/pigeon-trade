@@ -121,7 +121,7 @@ class BrowserAgent(BaseAgent):
                 return 0
             # Count unique (family, ticker) pairs across recent runs
             pairs: set[tuple[str, str]] = set()
-            run_ids = [r.id for r in recent]
+            run_ids = [r.get("id") for r in recent if r.get("id")]
             from aqr.registry.store import RegistryStore
             from aqr.session import async_session_factory
             async with async_session_factory() as db:

@@ -20,11 +20,15 @@ import hashlib
 import hmac
 import os
 import secrets
+import uuid
 from typing import Final
+
+from fastapi import HTTPException, Request, status
 
 _ALGO: Final = "sha256"
 _SIGNATURE_PREFIX: Final = "v1."
 _DEFAULT_TOKEN_TTL_SECONDS: Final = 60 * 60 * 24 * 30  # 30 дней
+SESSION_COOKIE: Final = "aqr_session"
 
 # Кешируется на уровне модуля, чтобы все вызовы в рамках процесса использовали
 # один и тот же секрет (без env — ephemeral, генерируется один раз).
@@ -114,9 +118,8 @@ def verify_token(token: str) -> str | None:
 async def verify_token_async(token: str, db_session_factory=None) -> str | None:
     """Async-вариант `verify_token` с проверкой session_id в БД (B14).
 
-    Если `db_session_factory=None` — пропускает DB-проверку (для тестов /
-    случаев когда БД ещё не поднята). Иначе загружает Session по
-    `session_id` и возвращает None, если сессия удалена.
+    Если `db_session_factory=None` — пропускает DB-проверку (используется
+    только на bootstrap settings). Иначе сессия обязана существовать.
     """
     from sqlalchemy import select
 
@@ -133,11 +136,41 @@ async def verify_token_async(token: str, db_session_factory=None) -> str | None:
             row = (await db.execute(stmt)).first()
             return session_id if row is not None else None
     except Exception:
-        # Если БД недоступна — fail open (HMAC-only). Это сознательный
-        # выбор: недоступность БД не должна валить авторизацию.
-        return session_id
+        # Fail closed: нельзя подтверждать удалённую или несуществующую
+        # сессию, когда БД недоступна.
+        return None
 
 
 def issue_default_token() -> str:
     """Создать токен для сессии 'default' — для dev/legacy-режима без auth."""
     return sign_session("default")
+
+
+def new_session_id() -> str:
+    """Создать непредсказуемый идентификатор сессии.
+
+    Клиент не выбирает ``session_id``: иначе любой известный ID можно
+    подписать через публичный endpoint и получить доступ к чужим данным.
+    """
+    return str(uuid.uuid4())
+
+
+async def require_session_id(request: Request) -> str:
+    """FastAPI dependency для защищённых HTTP endpoints.
+
+    Поддерживает HttpOnly cookie для браузера и Bearer HMAC-токен для
+    программного клиента. Проверка подписи и TTL обязательна в обоих путях.
+    """
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        authorization = request.headers.get("authorization", "")
+        scheme, _, value = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            token = value
+    session_id = verify_token(token or "")
+    if session_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="authentication required",
+        )
+    return session_id

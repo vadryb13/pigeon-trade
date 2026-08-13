@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from aqr.auth import require_session_id
 from aqr.background import schedule
 from aqr.registry import RegistryStore
 from aqr.session import get_db
@@ -72,6 +73,7 @@ class RunStarted(BaseModel):
 async def start_run(
     req: RunRequest,
     db: AsyncSession = Depends(get_db),
+    session_id: str = Depends(require_session_id),
 ) -> RunStarted:
     """Принять свободный запрос, спланировать, запустить исполнение в фоне."""
     planner = ResearchPlanner()
@@ -83,9 +85,7 @@ async def start_run(
     run_id_str = str(run_id)
 
     # Регистрируем run в BUS для EventBus
-    BUS._history[run_id_str] = []
-    BUS._subscribers[run_id_str] = []
-    BUS._done[run_id_str] = asyncio.Event()
+    await BUS.register_run(run_id_str, session_id)
 
     executor = PipelineExecutor(BUS)
 
@@ -95,9 +95,9 @@ async def start_run(
     # фоновая задача может стартануть раньше, чем транзакция request-handler
     # зафиксируется, и тогда `update_run_status` никого не найдёт.
     store = RegistryStore(db)
-    await store.get_or_create_session("default")
+    await store.get_or_create_session(session_id)
     await store.create_run(
-        id=run_id, goal=req.goal, session_id="default", status="running",
+        id=run_id, goal=req.goal, session_id=session_id, status="running",
     )
     await db.commit()
 
@@ -126,8 +126,10 @@ async def start_run(
 
 
 @router.get("/runs/{run_id}")
-async def get_run(run_id: str) -> dict:
+async def get_run(run_id: str, session_id: str = Depends(require_session_id)) -> dict:
     """Снимок всех накопленных событий."""
+    if not await BUS.owns(run_id, session_id):
+        raise HTTPException(status_code=404, detail="run not found")
     history = BUS.history(run_id)
     if not history:
         return {"run_id": run_id, "events": [], "status": "unknown"}
@@ -146,8 +148,10 @@ async def get_run(run_id: str) -> dict:
 
 
 @router.get("/runs/{run_id}/stream")
-async def stream_run(run_id: str):
+async def stream_run(run_id: str, session_id: str = Depends(require_session_id)):
     """SSE-стрим событий."""
+    if not await BUS.owns(run_id, session_id):
+        raise HTTPException(status_code=404, detail="run not found")
 
     async def gen():
         async for ev in BUS.subscribe(run_id):

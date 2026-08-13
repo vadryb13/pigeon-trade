@@ -7,7 +7,6 @@ from __future__ import annotations
 import sys
 
 import pytest
-
 from conftest import fake_openai_module
 
 

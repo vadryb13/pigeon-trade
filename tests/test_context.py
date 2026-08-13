@@ -8,9 +8,8 @@ from __future__ import annotations
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
-from conftest import BrokenFactory, FakeSession
-
 import pytest
+from conftest import BrokenFactory, FakeSession
 
 
 class _FakeHyp:

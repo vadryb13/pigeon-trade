@@ -19,6 +19,10 @@ from typing import TYPE_CHECKING, Any
 # Менять синхронно: здесь, в models.py (Vector(N)), и через ALTER TABLE.
 EMBEDDING_DIM = 768
 
+# Дефолтный период для загрузки данных и бэктестов.
+DEFAULT_START_DATE = "2023-01-01"
+DEFAULT_END_DATE = "2024-12-31"
+
 if TYPE_CHECKING:
     # Аннотации типов для IDE/static-checkers — runtime не нужен импорт,
     # потому что dataclasses используют только type hints и forward-refs.

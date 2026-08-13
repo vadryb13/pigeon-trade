@@ -8,9 +8,8 @@ import sys
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
-from conftest import FakeSession, fake_openai_module
-
 import pytest
+from conftest import FakeSession, fake_openai_module
 
 
 @pytest.fixture(autouse=True)

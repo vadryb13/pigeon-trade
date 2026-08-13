@@ -3,16 +3,12 @@ from __future__ import annotations
 
 import sys
 
+import pytest
 from conftest import (
     FakeAdapter,
-    FakeAsyncOpenAI,
-    FakeEmbeddingsAPI,
     FakeSession,
     fake_openai_module,
 )
-
-import pandas as pd
-import pytest
 from langgraph.graph import END
 
 from aqr.graph.graph import (

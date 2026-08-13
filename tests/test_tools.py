@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import sys
 
-from conftest import FakeAdapter, FakeSession, fake_openai_module
-
 import numpy as np
 import pytest
+from conftest import FakeAdapter, FakeSession, fake_openai_module
 
 from aqr.tools import ToolSpec, registry, reset_for_testing
 from aqr.tools.register import register_all

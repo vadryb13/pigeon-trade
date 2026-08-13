@@ -46,7 +46,11 @@ def app(monkeypatch):
 
 @pytest.fixture
 def client(app):
-    return TestClient(app)
+    from aqr.auth import SESSION_COOKIE, sign_session
+
+    test_client = TestClient(app)
+    test_client.cookies.set(SESSION_COOKIE, sign_session("test-api"))
+    return test_client
 
 
 # ── POST /team/run ───────────────────────────────────────────────
@@ -86,7 +90,6 @@ class TestTeamRun:
             "/team/run",
             json={
                 "goal": "проверь momentum на Сбере",
-                "session_id": "test-api",
             },
         )
         assert resp.status_code == 200

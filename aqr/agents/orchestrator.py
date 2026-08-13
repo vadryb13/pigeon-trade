@@ -68,7 +68,10 @@ async def run_team(
 
     # Step 1: Editor
     editor = EditorAgent(session_id)
-    plan_result = await editor.plan(goal)
+    try:
+        plan_result = await editor.plan(goal)
+    except Exception as exc:
+        return TeamResult(ok=False, goal=goal, error=f"EditorAgent: {type(exc).__name__}")
     if not plan_result.ok:
         return TeamResult(ok=False, goal=goal, error=plan_result.error, elapsed_seconds=round(time.time() - t0, 2))
     plan = plan_result.data.get("plan", {})
@@ -81,8 +84,10 @@ async def run_team(
 
     ticker_list = plan.get("tickers", ["SBER"])
     family_list = plan.get("hypothesis_families", ["momentum"])
-    start_date = plan.get("start_date", "2023-01-01")
-    end_date = plan.get("end_date", "2024-12-31")
+    from aqr.types import DEFAULT_END_DATE, DEFAULT_START_DATE
+
+    start_date = plan.get("start_date", DEFAULT_START_DATE)
+    end_date = plan.get("end_date", DEFAULT_END_DATE)
     timeframe = plan.get("timeframe", "D1")
 
     # Step 2: Browser (context gathering) — runs in parallel with analyst
@@ -125,6 +130,17 @@ async def run_team(
             all_results.extend(ar.data.get("results", []))
         elif isinstance(ar, AgentResult):
             errors.append(f"Analyst {ticker_list[i] if i < len(ticker_list) else i}: {ar.error}")
+
+    if errors:
+        return TeamResult(
+            ok=False,
+            goal=goal,
+            plan=plan,
+            context=context_data,
+            elapsed_seconds=round(time.time() - t0, 2),
+            error="; ".join(errors),
+            agent_errors=errors,
+        )
 
     # Step 4: Reviewer
     reviewer = ReviewerAgent(session_id)

@@ -200,9 +200,8 @@
 
   <div class="login" id="login">
     <form id="login-form">
-      <h2>Введите session_id</h2>
-      <input type="text" id="session-input" placeholder="alice" autocomplete="off" autofocus>
-      <button type="submit">Подключиться</button>
+      <h2>Новая защищённая сессия</h2>
+      <button type="submit" autofocus>Начать работу</button>
     </form>
   </div>
 
@@ -278,7 +277,6 @@ function renderMarkdown(text) {
 
 const state = {
   token: null,
-  sessionId: null,
   ws: null,
   reconnectDelay: 2000,
   connected: false,
@@ -372,7 +370,7 @@ function connect() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = state.token
     ? `${proto}//${window.location.host}/chat/${encodeURIComponent(state.token)}`
-    : `${proto}//${window.location.host}/chat/${encodeURIComponent(state.sessionId)}`;
+    : `${proto}//${window.location.host}/chat/invalid`;
   const ws = new WebSocket(url);
   state.ws = ws;
 
@@ -507,9 +505,6 @@ function logout() {
   state.connected = false;
   state.historyLoaded = false;
   state.token = null;
-  state.sessionId = null;
-  localStorage.removeItem('aqr_token');
-  localStorage.removeItem('aqr_session');
   sessionLabel.textContent = '—';
   setStatus('disconnected');
   chatEl.classList.remove('active');
@@ -518,23 +513,15 @@ function logout() {
   banner.classList.remove('visible');
 }
 
-async function login(sessionId) {
-  sessionId = (sessionId || '').trim();
-  if (!sessionId) {
-    alert('session_id обязателен');
-    return;
-  }
+async function login() {
   try {
-    const r = await fetch(`/chat/new?session_id=${encodeURIComponent(sessionId)}`);
+    const r = await fetch('/chat/new', { method: 'POST' });
     if (!r.ok) {
       alert(`Login failed: ${r.status}`);
       return;
     }
     const data = await r.json();
-    state.sessionId = data.session_id;
     state.token = data.token;
-    localStorage.setItem('aqr_session', data.session_id);
-    if (data.token) localStorage.setItem('aqr_token', data.token);
     loginEl.style.display = 'none';
     chatEl.classList.add('active');
     connect();
@@ -546,7 +533,7 @@ async function login(sessionId) {
 /* ── Event listeners ──────────────────────────── */
 $('login-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  login($('session-input').value);
+  login();
 });
 
 $('send').addEventListener('click', () => handleCommand(inputEl.value));
@@ -566,20 +553,6 @@ $('help-overlay').addEventListener('click', (e) => {
   if (e.target.id === 'help-overlay') $('help-overlay').classList.remove('visible');
 });
 
-/* ── Restore session on load ──────────────────── */
-(function init() {
-  const savedSession = localStorage.getItem('aqr_session');
-  const savedToken = localStorage.getItem('aqr_token');
-  if (savedSession) {
-    state.sessionId = savedSession;
-    state.token = savedToken;
-    state.historyLoaded = false;
-    $('session-input').value = savedSession;
-    loginEl.style.display = 'none';
-    chatEl.classList.add('active');
-    connect();
-  }
-})();
 </script>
 </body>
 </html>

@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 BROKER_COMMISSION_PCT = 0.0005
 MIN_PRICES = 126
+SLIPPAGE_TICK_PCT = 0.0001
 
 
 def _require_nautilus():
@@ -129,12 +130,27 @@ async def execute_with_slippage(
             f"Insufficient data: {len(price_series)} < {MIN_PRICES}"
         )
 
-    # Signal → positions → returns
+    if commission_pct < 0:
+        raise ValueError("commission_pct must be non-negative")
+    if slippage_ticks < 0:
+        raise ValueError("slippage_ticks must be non-negative")
+
+    # Signal → positions → returns. Commission and slippage are charged on
+    # each unit of position turnover, so a stationary position has no costs.
     pos = spec.fn(price_series)
     pos_shifted = pos.shift(1).fillna(0.0)
     ret = price_series.pct_change().fillna(0.0)
-    strat_ret = (pos_shifted * ret).astype(float)
+    turnover = pos_shifted.diff().abs().fillna(pos_shifted.abs())
+    execution_cost = turnover * (
+        commission_pct + slippage_ticks * SLIPPAGE_TICK_PCT
+    )
+    strat_ret = (pos_shifted * ret - execution_cost).astype(float)
     strat_ret = strat_ret.dropna()
+
+    # A flat market must remain insufficient even when a trading strategy
+    # would incur deterministic costs; otherwise costs create a fake variance.
+    if ret.std() == 0:
+        return _compute_metrics(pd.Series(dtype=float), spec, price_series=price_series)
 
     # NautilusTrader path: realistic execution simulation
     nt = _require_nautilus()
@@ -153,7 +169,7 @@ async def execute_with_slippage(
                 exc,
             )
 
-    # Native path: same logic as backtest_one
+    # Native path is explicitly a deterministic cost model, not Nautilus.
     return _compute_metrics(strat_ret, spec, price_series=price_series, n_hypotheses=n_hypotheses)
 
 

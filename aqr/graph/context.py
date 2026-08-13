@@ -15,10 +15,10 @@ import logging
 from contextvars import ContextVar
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from ..registry import DecryptedSettings, RegistryStore
 from ..session import async_session_factory
+
+logger = logging.getLogger(__name__)
 
 # ── Per-session credentials ─────────────────────────────────────
 

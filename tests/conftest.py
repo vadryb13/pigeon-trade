@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import sys
 import types
-from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -120,7 +119,7 @@ class FakeEmbeddingsAPI:
 
 def _embedding_for_text(text: str) -> list[float]:
     """Deterministic embedding where conceptually similar texts are closer.
-    
+
     Two texts about 'momentum on SBER' will have positive vec[0] and vec[1],
     while a text about 'currency pairs EUR USD' will have those at zero and
     vec[2] positive — this makes cosine similarity higher for similar texts.

@@ -159,10 +159,12 @@ async def load_data_node(state: AgentState) -> dict[str, Any]:
     """Загрузить цены для тикеров из плана."""
     plan = state["plan"]
     tool = tool_registry.get("load_prices")
+    from ..types import DEFAULT_END_DATE, DEFAULT_START_DATE
+
     prices = await tool.fn(
         tickers=plan.get("tickers", []),
-        start_date=plan.get("start_date", "2023-01-01"),
-        end_date=plan.get("end_date", "2024-12-31"),
+        start_date=plan.get("start_date", DEFAULT_START_DATE),
+        end_date=plan.get("end_date", DEFAULT_END_DATE),
         timeframe=plan.get("timeframe", "D1"),
     )
     return {"prices": prices, "step": "load_data"}

@@ -2,6 +2,10 @@
 
 Контракт для LLM-агентов, работающих с этим репозиторием.
 
+**Язык общения с пользователем — русский.** Весь пользовательский текст
+(объяснения, вопросы, отчёты, диффы, ошибки) — по-русски. Код, идентификаторы,
+команды, env-переменные, логи — как в репозитории (частично английский).
+
 ## Проект
 
 AQR — пайплайн для проверки торговых гипотез на MOEX через T-Invest API.
@@ -51,6 +55,20 @@ SSL_TBANK_VERIFY=true
 Startup (`validate_runtime`) требует `DATABASE_URL` + `AQR_SESSION_SECRET`.
 LLM/Invest/embeddings-ключи проверяются при первом использовании.
 
+`validate_runtime` (см. `aqr/startup.py`) также **auto-provision'ит Postgres**:
+если БД недоступна и Docker daemon отвечает — `docker compose -f aqr-compose.yml up -d postgres`
+запускается автоматически. Если БД уже поднята — стартует сразу. На полностью ручной
+инсталляции (systemd Postgres) без Docker — нужно заранее поднять БД самому.
+
+`OPENAI_API_KEY=ollama` — допустимый трюк для локального Ollama (нет auth-check'а,
+любая непустая строка). Для эмбеддингов с Ollama также задаётся `OPENAI_BASE_URL`.
+
+Другие полезные env (см. `.env.example`):
+- `AQR_LOG_JSON=1` — структурированный JSON-лог вместо human-readable.
+- `AQR_MAX_BACKGROUND_TASKS=64` — лимит одновременных pipeline-тасков (PERF-1).
+- `AQR_ALLOWED_ORIGINS` — CORS, дефолт wildcard `"*"`. В проде **обязательно** переопределить.
+- `INVEST_SANDBOX=1` — для dev/CI; иначе T-Invest gRPC идёт в прод.
+
 ## Архитектура
 
 ```
@@ -67,6 +85,7 @@ aqr/
   executor/   NautilusTrader — с комиссиями и slippage (native fallback)
   api/        POST /team/run, /executor/nautilus, /mcp/rpc
   mcp/        JSON-RPC 2.0 (get_candles, resolve_figi, search_similar, find_duplicates)
+  explore/    REST /api/explore (гипотезы, статистика, SSE, presence tracking)
 ```
 
 ## Ключевые точки входа
@@ -79,7 +98,7 @@ aqr/
 | Web UI (explore) | `http://localhost:8000/explore` |
 | Agent вызов | `from aqr.graph import run_agent; await run_agent(...)` |
 | WS | `WS /chat/{token}`, токен через `GET /chat/new?session_id=...` |
-| CI | `ruff check aqr/ tests/` → `PYTHONPATH=. pytest tests/ --cov=aqr --cov-fail-under=80` |
+| CI | `ruff check aqr/ tests/` → `PYTHONPATH=. pytest tests/ -x -q --tb=short` |
 
 ## Инварианты (не нарушать)
 
@@ -161,9 +180,10 @@ ToolSpec(name="x", description="x", input_schema={"type": "object", "properties"
 
 ## Тесты
 
-31 файл, ~280 тестов. `pytest-asyncio` в режиме `auto` — `async def` без декоратора.
+31 файл, 317 тестов. `pytest-asyncio` в режиме `auto` — `async def` без декоратора.
 Нужен `.env` с `DATABASE_URL` + `AQR_SESSION_SECRET`.
 Local coverage: `coverage run --source=aqr -m pytest tests/` (быстрее `--cov`).
+CI не включает coverage, только lint + test (`-x -q --tb=short`).
 
 ### Паттерн моков
 
@@ -190,8 +210,10 @@ Local coverage: `coverage run --source=aqr -m pytest tests/` (быстрее `--
 | `agents/analyst.py` | Сбой скринера/бэктеста → `[]/None`, indistinguishable от «не нашёл идей». |
 | `agents/writer.py` | Fallback-строки на русском идут в финальный отчёт; оркестратор считает прогон успешным. |
 | Системная | 7 разных паттернов ошибок (raise, `{"error": ...}`, `None`, falsy defaults, catch-reraise, fallback, RuntimeError). |
-
-## Стиль
+| `data/ohlcv_cache.py` | DuckDB: конкурентные подключения к одному `.duckdb`-файлу падают с `"Can't open connection to same database file with a different configuration"`. Проявляется при параллельных `load_prices` в team/run. |
+| `agents/browser.py:124` | `_count_tested_families`: `get_recent_runs()` возвращает `list[dict]`, код ждал ORM-объекты — `r.id` → `AttributeError`. Исправлено на `r.get("id")`. |
+| `explore/api.py:50,67` | `except Exception` → 503 `"Database unavailable"` маскирует реальную ошибку (например, JOIN на несуществующей таблице). Нужно логировать `traceback`. |
+| Тестовая инфраструктура | `TestClient` + `asyncpg`: последовательные запросы в одном event loop дают `"another operation is in progress"` — в проде через uvicorn не воспроизводится. |
 
 ## Docker
 
@@ -224,3 +246,4 @@ docker compose build app && docker compose up -d
 - Без emoji в коде и коммитах
 - HTML-шаблоны — vanilla JS, без бандлера
 - Комментарии — только когда неочевидно; не комментировать тривиальный код
+- `numpy`, `pandas`, `scipy` — стандартные импорты через `import numpy as np`, `import pandas as pd`

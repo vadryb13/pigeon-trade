@@ -297,12 +297,13 @@ class RegistryStore:
     # ── Explore API ────────────────────────────────────────────
 
     async def list_all_hypotheses(
-        self, limit: int = 100, offset: int = 0,
+        self, session_id: str, limit: int = 100, offset: int = 0,
     ) -> list[dict]:
         """Все гипотезы с метриками для explore-таблицы."""
         stmt = (
             select(Hypothesis, Run)
             .join(Run, Hypothesis.run_id == Run.id)
+            .where(Run.session_id == session_id)
             .order_by(Hypothesis.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -326,9 +327,15 @@ class RegistryStore:
             })
         return result
 
-    async def get_hypothesis_detail(self, hyp_uuid: uuid.UUID) -> dict | None:
+    async def get_hypothesis_detail(
+        self, hyp_uuid: uuid.UUID, session_id: str,
+    ) -> dict | None:
         """Детали гипотезы + run = для notebook."""
-        stmt = select(Hypothesis, Run).join(Run).where(Hypothesis.id == hyp_uuid)
+        stmt = (
+            select(Hypothesis, Run)
+            .join(Run)
+            .where(Hypothesis.id == hyp_uuid, Run.session_id == session_id)
+        )
         row = (await self._db.execute(stmt)).one_or_none()
         if row is None:
             return None
@@ -352,17 +359,19 @@ class RegistryStore:
             "updated_at": run.created_at.isoformat(),
         }
 
-    async def get_explore_stats(self) -> dict:
+    async def get_explore_stats(self, session_id: str) -> dict:
         """Агрегатные метрики для статистики на explore."""
         from sqlalchemy import func
         hyp_count = (await self._db.execute(
-            select(func.count(Hypothesis.id))
+            select(func.count(Hypothesis.id)).join(Run).where(Run.session_id == session_id)
         )).scalar() or 0
         n_valid = (await self._db.execute(
-            select(func.count(Hypothesis.id)).where(Hypothesis.is_valid.is_(True))
+            select(func.count(Hypothesis.id))
+            .join(Run)
+            .where(Hypothesis.is_valid.is_(True), Run.session_id == session_id)
         )).scalar() or 0
         run_count = (await self._db.execute(
-            select(func.count(Run.id))
+            select(func.count(Run.id)).where(Run.session_id == session_id)
         )).scalar() or 0
         return {
             "total_hypotheses": hyp_count,
@@ -371,7 +380,7 @@ class RegistryStore:
             "win_rate": round(n_valid / hyp_count * 100, 1) if hyp_count else 0,
         }
 
-    async def get_recent_activity(self, days: int = 7) -> list[dict]:
+    async def get_recent_activity(self, session_id: str, days: int = 7) -> list[dict]:
         """События за N дней — создание гипотез и прогонов."""
         from datetime import timedelta
         cutoff = datetime.now(UTC) - timedelta(days=days)
@@ -381,7 +390,7 @@ class RegistryStore:
         stmt_hyp = (
             select(Hypothesis, Run)
             .join(Run)
-            .where(Hypothesis.created_at >= cutoff)
+            .where(Hypothesis.created_at >= cutoff, Run.session_id == session_id)
             .order_by(Hypothesis.created_at.desc())
             .limit(50)
         )
@@ -399,7 +408,7 @@ class RegistryStore:
         # Новые прогоны
         stmt_run = (
             select(Run)
-            .where(Run.created_at >= cutoff)
+            .where(Run.created_at >= cutoff, Run.session_id == session_id)
             .order_by(Run.created_at.desc())
             .limit(20)
         )

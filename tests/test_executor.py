@@ -4,12 +4,10 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-import pandas as pd
 import pytest
 
 from aqr.pipeline.events import Event, EventBus
 from aqr.pipeline.executor import PipelineExecutor
-from aqr.pipeline.hypotheses import HypothesisSpec
 from aqr.pipeline.planner import ResearchPlan
 
 

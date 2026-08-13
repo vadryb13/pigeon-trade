@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import time
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass, field
@@ -69,7 +70,35 @@ class EventBus:
         self._history: dict[str, list[Event]] = {}
         self._subscribers: dict[str, list[asyncio.Queue]] = {}
         self._done: dict[str, asyncio.Event] = {}
+        self._owners: dict[str, str] = {}
+        self._finished_at: dict[str, float] = {}
         self._lock = asyncio.Lock()
+        self._history_limit = int(os.getenv("AQR_EVENT_HISTORY_LIMIT", "1000"))
+        self._retention_seconds = float(os.getenv("AQR_EVENT_RETENTION_SECONDS", "3600"))
+
+    async def register_run(self, run_id: str, session_id: str) -> None:
+        """Register ownership before publishing; run IDs are never global data."""
+        async with self._lock:
+            self._history[run_id] = []
+            self._subscribers[run_id] = []
+            self._done[run_id] = asyncio.Event()
+            self._owners[run_id] = session_id
+
+    async def owns(self, run_id: str, session_id: str) -> bool:
+        async with self._lock:
+            return self._owners.get(run_id) == session_id
+
+    def _prune_finished_locked(self, now: float) -> None:
+        expired = [
+            run_id for run_id, finished_at in self._finished_at.items()
+            if now - finished_at >= self._retention_seconds
+        ]
+        for run_id in expired:
+            self._history.pop(run_id, None)
+            self._subscribers.pop(run_id, None)
+            self._done.pop(run_id, None)
+            self._owners.pop(run_id, None)
+            self._finished_at.pop(run_id, None)
 
     async def publish(self, event: Event) -> None:
         # Fast-path без лока для чтения/апдейта dict.setdefault-append.
@@ -79,7 +108,11 @@ class EventBus:
         # subscribers и put_nowait (если кто-то делает subscribe между
         # ними и вставит "тихий" хвост). Поэтому лочим.
         async with self._lock:
-            self._history.setdefault(event.run_id, []).append(event)
+            self._prune_finished_locked(time.time())
+            history = self._history.setdefault(event.run_id, [])
+            history.append(event)
+            if len(history) > self._history_limit:
+                del history[:-self._history_limit]
             for q in self._subscribers.get(event.run_id, []):
                 try:
                     q.put_nowait(event)
@@ -92,6 +125,7 @@ class EventBus:
                 done = self._done.get(event.run_id)
                 if done:
                     done.set()
+                self._finished_at[event.run_id] = time.time()
 
     def history(self, run_id: str) -> list[Event]:
         # Read-only snapshot — атомарно под GIL.

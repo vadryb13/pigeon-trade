@@ -39,12 +39,7 @@ class WriterAgent(BaseAgent):
         valid = validation or {}
 
         if not results:
-            return self._ok(
-                narrative="Не удалось получить результаты исследования.",
-                insights=[],
-                summary="Нет данных",
-                top_results=[],
-            )
+            return self._fail("no backtest results available")
 
         # 1) Determine top-5 by DSR
         top = sorted(
@@ -106,7 +101,7 @@ class WriterAgent(BaseAgent):
         """Run extract_insights tool."""
         tool = tool_registry.get("extract_insights")
         if tool is None:
-            return []
+            raise RuntimeError("extract_insights tool not registered")
         try:
             return await tool.fn(
                 top_results=top_results,
@@ -115,9 +110,9 @@ class WriterAgent(BaseAgent):
                 pbo=pbo,
                 pbo_verdict=pbo_verdict,
             )
-        except Exception:
+        except Exception as exc:
             self.logger.exception("extract_insights failed")
-            return ["Не удалось извлечь инсайты автоматически."]
+            raise RuntimeError("extract_insights failed") from exc
 
     async def _generate_narrative(
         self,
@@ -133,7 +128,7 @@ class WriterAgent(BaseAgent):
         """Run narrate tool."""
         tool = tool_registry.get("narrate")
         if tool is None:
-            return "Narrate tool not available."
+            raise RuntimeError("narrate tool not registered")
 
         try:
             return await tool.fn(
@@ -147,6 +142,6 @@ class WriterAgent(BaseAgent):
                 top_results=top_results,
                 elapsed_seconds=elapsed,
             )
-        except Exception:
+        except Exception as exc:
             self.logger.exception("narrate failed")
-            return "Не удалось сгенерировать отчёт."
+            raise RuntimeError("narrate failed") from exc

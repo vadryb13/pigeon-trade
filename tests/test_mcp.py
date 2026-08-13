@@ -1,11 +1,10 @@
 """Tests for MCP JSON-RPC server — dispatch and method handlers."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
-
-from conftest import FakeSession
+from unittest.mock import MagicMock
 
 import pytest
+from conftest import FakeSession
 
 
 @pytest.fixture(autouse=True)

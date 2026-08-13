@@ -38,7 +38,6 @@ class PresenceTracker:
 
     async def heartbeat(self, session_id: str, name: str, hyp_id: str | None = None) -> None:
         async with self._lock:
-            old_hyp = self._sessions.get(session_id, {}).get("hyp_id")
             self._sessions[session_id] = {"name": name, "hyp_id": hyp_id, "last_seen": time.monotonic()}
             # Extend lock if held by this session
             if hyp_id and hyp_id in self._locks and self._locks[hyp_id]["session_id"] == session_id:

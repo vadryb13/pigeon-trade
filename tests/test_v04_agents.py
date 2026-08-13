@@ -8,9 +8,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from conftest import FakeAdapter, FakeSession, fake_openai_module
-
 import pytest
+from conftest import FakeAdapter, FakeSession, fake_openai_module
 
 # ── Helpers ──────────────────────────────────────────────────────
 

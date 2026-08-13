@@ -21,8 +21,6 @@ _MAX_BACKGROUND_TASKS = int(os.getenv("AQR_MAX_BACKGROUND_TASKS", "64"))
 
 # Strong-references на запущенные фоновые задачи (PERF-1).
 _background_tasks: set[asyncio.Task] = set()
-
-
 def schedule(coro: Coroutine[Any, Any, Any]) -> asyncio.Task:
     """Запустить корутину в фоне, удерживая strong-reference.
 
@@ -54,8 +52,3 @@ async def drain(timeout: float = 30.0) -> None:
             asyncio.gather(*_background_tasks, return_exceptions=True),
             timeout=timeout,
         )
-
-
-def active_count() -> int:
-    """Текущее количество активных фоновых задач (для мониторинга)."""
-    return len(_background_tasks)

@@ -11,8 +11,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
+from aqr.auth import require_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,6 @@ router = APIRouter(tags=["v04"])
 
 class TeamRunRequest(BaseModel):
     goal: str
-    session_id: str = "default"
     tickers: list[str] | None = None
     families: list[str] | None = None
 
@@ -39,13 +40,15 @@ class MCPRpcRequest(BaseModel):
 
 
 @router.post("/team/run")
-async def post_team_run(req: TeamRunRequest) -> dict[str, Any]:
+async def post_team_run(
+    req: TeamRunRequest, session_id: str = Depends(require_session_id),
+) -> dict[str, Any]:
     """Run the 5-agent team on a research goal."""
     from aqr.agents.orchestrator import run_team
 
     result = await run_team(
         goal=req.goal,
-        session_id=req.session_id,
+        session_id=session_id,
         tickers=req.tickers,
         families=req.families,
     )
@@ -66,7 +69,9 @@ async def post_team_run(req: TeamRunRequest) -> dict[str, Any]:
 
 
 @router.post("/executor/nautilus")
-async def post_executor_nautilus(req: ExecutorRequest) -> dict[str, Any]:
+async def post_executor_nautilus(
+    req: ExecutorRequest, _session_id: str = Depends(require_session_id),
+) -> dict[str, Any]:
     """Run NautilusTrader backtest with realistic execution."""
     from aqr.executor.nautilus import execute_with_slippage
 
@@ -80,7 +85,9 @@ async def post_executor_nautilus(req: ExecutorRequest) -> dict[str, Any]:
 
 
 @router.post("/mcp/rpc")
-async def post_mcp_rpc(req: MCPRpcRequest) -> dict[str, Any]:
+async def post_mcp_rpc(
+    req: MCPRpcRequest, _session_id: str = Depends(require_session_id),
+) -> dict[str, Any]:
     """JSON-RPC dispatch to MCP server."""
     from aqr.mcp.server import dispatch
 

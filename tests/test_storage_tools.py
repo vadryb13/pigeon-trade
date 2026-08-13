@@ -9,9 +9,8 @@ import uuid
 from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock
 
-from conftest import BrokenFactory, FakeSession
-
 import pytest
+from conftest import BrokenFactory, FakeSession
 
 
 @pytest.fixture(autouse=True)

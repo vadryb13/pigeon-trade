@@ -92,3 +92,29 @@ class TestEphemeralSecretFallback:
 
         monkeypatch.setenv("AQR_SESSION_SECRET", "new-fixed-secret-32-bytes==")
         assert auth_mod.verify_token(token_no_env) is None
+
+
+class TestHttpSessionDependency:
+    @pytest.mark.asyncio
+    async def test_accepts_signed_cookie(self, _stable_secret):
+        from starlette.requests import Request
+
+        from aqr.auth import SESSION_COOKIE, require_session_id, sign_session
+
+        token = sign_session("alice")
+        request = Request({
+            "type": "http",
+            "headers": [(b"cookie", f"{SESSION_COOKIE}={token}".encode())],
+        })
+        assert await require_session_id(request) == "alice"
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_credentials(self):
+        from fastapi import HTTPException
+        from starlette.requests import Request
+
+        from aqr.auth import require_session_id
+
+        with pytest.raises(HTTPException) as exc_info:
+            await require_session_id(Request({"type": "http", "headers": []}))
+        assert exc_info.value.status_code == 401

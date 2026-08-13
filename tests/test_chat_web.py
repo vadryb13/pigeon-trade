@@ -34,6 +34,14 @@ def _mock_db(monkeypatch):
 
     monkeypatch.setattr(db_mod, "async_session_factory", _F())
     monkeypatch.setattr(ws_mod, "async_session_factory", _F())
+    from aqr.chat import web as web_mod
+    monkeypatch.setattr(web_mod, "async_session_factory", _F())
+    from aqr.auth import verify_token
+
+    async def fake_verify_token_async(token, _factory):
+        return verify_token(token)
+
+    monkeypatch.setattr(ws_mod, "verify_token_async", fake_verify_token_async)
 
     # Мок _load_credentials чтобы WS-handshake не падал
     from aqr.chat import ws as ws_mod
@@ -73,8 +81,8 @@ class TestChatPage:
         assert "/help" in body
         assert "dark" in body.lower() or "#1a1d23" in body
 
-    def test_chat_page_has_login_form(self):
-        """Login-форма присутствует в HTML."""
+    def test_chat_page_creates_server_session(self):
+        """UI не просит пользователя задавать предсказуемый session_id."""
         from fastapi.testclient import TestClient
 
         from aqr.main import app
@@ -82,7 +90,8 @@ class TestChatPage:
         client = TestClient(app)
         body = client.get("/chat").text
         assert 'id="login"' in body
-        assert 'id="session-input"' in body
+        assert "Новая защищённая сессия" in body
+        assert "fetch('/chat/new', { method: 'POST' })" in body
         assert 'id="chat"' in body
 
     def test_chat_page_has_message_log(self):
@@ -127,54 +136,33 @@ class TestChatPage:
 
 
 class TestChatNew:
-    def test_returns_signed_token_when_auth_enabled(self):
-        """С auth — возвращает валидный HMAC-токен."""
+    def test_creates_signed_opaque_session(self):
+        """Сервер возвращает HMAC токен, не принимая client-controlled ID."""
         from fastapi.testclient import TestClient
 
         from aqr.auth import verify_token
         from aqr.main import app
 
         client = TestClient(app)
-        r = client.get("/chat/new", params={"session_id": "alice"})
+        r = client.post("/chat/new")
         assert r.status_code == 200
         data = r.json()
-        assert data["session_id"] == "alice"
+        assert len(data["session_id"]) == 36
         assert data["token"] is not None
-        assert verify_token(data["token"]) == "alice"
+        assert verify_token(data["token"]) == data["session_id"]
+        assert "HttpOnly" in r.headers["set-cookie"]
 
-    def test_empty_session_id_rejected(self):
-        """Пустой session_id → 422 (валидация Query)."""
+    def test_client_session_id_is_not_accepted(self):
+        """Query-параметр не влияет на выданную сессию."""
         from fastapi.testclient import TestClient
 
         from aqr.main import app
 
         client = TestClient(app)
-        r = client.get("/chat/new", params={"session_id": ""})
-        assert r.status_code == 422
-
-    def test_long_session_id_rejected(self):
-        """Слишком длинный session_id (>64) → 422."""
-        from fastapi.testclient import TestClient
-
-        from aqr.main import app
-
-        client = TestClient(app)
-        r = client.get("/chat/new", params={"session_id": "x" * 65})
-        assert r.status_code == 422
-
-    def test_unicode_session_id_accepted(self):
-        """Unicode session_id проходит."""
-        from fastapi.testclient import TestClient
-
-        from aqr.auth import verify_token
-        from aqr.main import app
-
-        client = TestClient(app)
-        r = client.get("/chat/new", params={"session_id": "сессия-用户"})
+        r = client.post("/chat/new?session_id=alice")
         assert r.status_code == 200
         data = r.json()
-        assert data["session_id"] == "сессия-用户"
-        assert verify_token(data["token"]) == "сессия-用户"
+        assert data["session_id"] != "alice"
 
 
 class TestIntegrationWithWebSocket:
@@ -189,7 +177,7 @@ class TestIntegrationWithWebSocket:
         client = TestClient(app)
 
         # 1. Получаем токен
-        token_resp = client.get("/chat/new", params={"session_id": "integration-test"})
+        token_resp = client.post("/chat/new")
         assert token_resp.status_code == 200
         token = token_resp.json()["token"]
 
@@ -197,7 +185,7 @@ class TestIntegrationWithWebSocket:
         with client.websocket_connect(f"/chat/{token}") as ws:
             msg = ws.receive_json()
             assert msg["type"] == "connected"
-            assert msg["session_id"] == "integration-test"
+            assert msg["session_id"] == token_resp.json()["session_id"]
 
             # 3. Ping → pong
             ws.send_text('{"type": "ping"}')

@@ -109,9 +109,16 @@ async def _load_credentials(session_id: str) -> DecryptedSettings | None:
     )
 
 
-async def _send_json(ws: WebSocket, payload: dict[str, Any]) -> None:
-    """Отправить JSON клиенту (обёртка для удобства)."""
-    await ws.send_text(json.dumps(payload, ensure_ascii=False))
+async def _send_json(ws: WebSocket, payload: dict[str, Any]) -> bool:
+    """Отправить JSON клиенту (обёртка для удобства).
+
+    Returns False если клиент отключился — вызывающий должен прекратить отправку.
+    """
+    try:
+        await ws.send_text(json.dumps(payload, ensure_ascii=False))
+        return True
+    except Exception:
+        return False
 
 
 # ── WS endpoint ──────────────────────────────────────────────────
@@ -266,7 +273,7 @@ async def _run_agent_for_session(
         result = await _run_agent_inner(websocket, session_id, message, session_context_prompt)
     finally:
         reset_credentials(cred_token)
-    return result  # noqa: F706 — explicit for type checker
+    return result
 
 
 async def _run_agent_inner(
@@ -304,17 +311,18 @@ async def _run_agent_inner(
                 if not isinstance(ev, dict):
                     continue
                 node = ev.get("step", "")
-                if node:
-                    await _send_json(websocket, {
+                if node and not await _send_json(websocket, {
                         "type": "progress",
                         "node": node,
                         "data": _state_summary(ev),
-                    })
+                    }):
+                    break
                 last_state = ev
         except Exception:
             logger.exception("astream failed, falling back to ainvoke")
             last_state = await agent.ainvoke(initial_state)
-            await _send_json(websocket, {"type": "progress", "node": "final", "data": _state_summary(last_state)})
+            if not await _send_json(websocket, {"type": "progress", "node": "final", "data": _state_summary(last_state)}):
+                return
 
         final_messages = last_state.get("messages", []) if isinstance(last_state, dict) else []
         assistant_text = ""
